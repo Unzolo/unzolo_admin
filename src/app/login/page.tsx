@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { Suspense, useState, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ShieldCheck, Phone, ArrowRight, Loader2, AlertCircle, ChevronLeft, KeyRound, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -54,8 +54,8 @@ function OtpInput({ value, onChange }: { value: string[]; onChange: (v: string[]
                     onChange={(e) => handleChange(i, e)}
                     onKeyDown={(e) => handleKey(i, e)}
                     className={`w-11 h-12 text-center text-lg font-bold rounded-2xl border-2 transition-all focus:outline-none focus:scale-105 ${value[i]
-                            ? "border-primary-normal bg-primary-light text-primary-normal"
-                            : "border-gray-200 bg-gray-50 text-gray-800 focus:border-primary-normal focus:bg-white"
+                        ? "border-primary-normal bg-primary-light text-primary-normal"
+                        : "border-gray-200 bg-gray-50 text-gray-800 focus:border-primary-normal focus:bg-white"
                         }`}
                 />
             ))}
@@ -63,9 +63,9 @@ function OtpInput({ value, onChange }: { value: string[]; onChange: (v: string[]
     );
 }
 
-// ─── Main Login Page ──────────────────────────────────────────────────────────
+// ─── Inner form (uses useSearchParams — must be inside Suspense) ───────────────
 
-export default function LoginPage() {
+function LoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const from = searchParams.get("from") || "/";
@@ -301,5 +301,15 @@ export default function LoginPage() {
                 </p>
             </motion.div>
         </div>
+    );
+}
+
+// ─── Default export wrapped in Suspense ───────────────────────────────────────
+
+export default function LoginPage() {
+    return (
+        <Suspense>
+            <LoginForm />
+        </Suspense>
     );
 }
