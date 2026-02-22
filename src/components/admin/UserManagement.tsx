@@ -3,102 +3,108 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "../../utils/axios";
-import {
-    User as UserIcon,
-    MoreVertical,
-    ShieldAlert,
-    ShieldCheck,
-    Mail,
-    Phone
-} from "lucide-react";
-import { format } from "date-fns";
+import { User as UserIcon, ShieldAlert, ShieldCheck, Phone, MoreVertical, Loader2, Users } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 
 export default function UserManagement() {
     const { data, isLoading, refetch } = useQuery({
         queryKey: ["adminUsers"],
-        queryFn: async () => {
-            const { data } = await api.get("/admin/users");
-            return data;
-        },
+        queryFn: async () => { const { data } = await api.get("/admin/users"); return data; },
     });
 
     const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
         try {
             await api.post("/admin/users/status", { userId, status: !currentStatus });
-            toast.success(`User ${!currentStatus ? "activated" : "blocked"} successfully`);
+            toast.success(`User ${!currentStatus ? "activated" : "blocked"}`);
             refetch();
-        } catch (error) {
-            console.error("Failed to toggle user status:", error);
-            toast.error("Failed to update user status");
-        }
+        } catch { toast.error("Failed to update user status"); }
     };
 
-    if (isLoading) return <div className="p-8 text-center text-gray-500">Loading Users...</div>;
+    if (isLoading) return (
+        <div className="flex flex-col items-center justify-center min-h-[300px] gap-3">
+            <Loader2 size={28} className="text-blue-500 animate-spin" />
+            <p className="text-sm text-gray-400">Loading users...</p>
+        </div>
+    );
+
+    const users = data?.users || [];
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <h2 className="text-xl font-bold text-gray-800">Users ({data?.users?.length || 0})</h2>
-                <div className="flex gap-2">
-                    <button className="flex-1 sm:flex-none bg-white border border-gray-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-all text-center">Export CSV</button>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-xl font-bold text-gray-900">User Management</h2>
+                    <p className="text-xs text-gray-400 mt-0.5">{users.length} registered users</p>
                 </div>
+                <button className="flex items-center gap-2 h-9 px-4 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-all">
+                    Export CSV
+                </button>
             </div>
 
-            <div className="grid gap-4">
-                {data?.users?.map((user: any) => (
-                    <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        key={user.id}
-                        className="bg-white p-4 sm:p-5 rounded-lg border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-primary-light transition-all group"
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full overflow-hidden border border-gray-100 flex items-center justify-center bg-gray-50 shrink-0">
-                                {user.profile_picture ? (
-                                    <img src={user.profile_picture} alt={user.full_name} className="w-full h-full object-cover" />
-                                ) : (
-                                    <UserIcon className="text-gray-300" size={20} />
-                                )}
-                            </div>
-                            <div className="min-w-0">
-                                <h3 className="font-bold text-gray-800 text-sm sm:text-base truncate">{user.full_name || "Unnamed User"}</h3>
-                                <p className="text-xs sm:text-sm text-gray-400 truncate">@{user.username || "no-username"}</p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-8 w-full sm:w-auto mt-2 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-gray-50">
-                            <div className="hidden md:flex items-center gap-4">
-                                <div className="flex items-center gap-1.5 text-gray-500">
-                                    <Phone size={14} />
-                                    <span className="text-xs">{user.phone_number}</span>
+            {users.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-16 flex flex-col items-center gap-3 text-center">
+                    <div className="h-14 w-14 rounded-2xl bg-blue-50 flex items-center justify-center">
+                        <Users size={24} className="text-blue-200" />
+                    </div>
+                    <p className="text-sm text-gray-400">No users found.</p>
+                </div>
+            ) : (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="divide-y divide-gray-50">
+                        {users.map((user: any, i: number) => (
+                            <motion.div
+                                key={user.id}
+                                initial={{ opacity: 0, x: -8 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: i * 0.03 }}
+                                className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50/60 transition-colors group"
+                            >
+                                {/* Avatar */}
+                                <div className="h-10 w-10 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center shrink-0 border border-gray-100">
+                                    {user.profile_picture
+                                        ? <img src={user.profile_picture} alt={user.full_name} className="w-full h-full object-cover" />
+                                        : <UserIcon size={16} className="text-gray-300" />}
                                 </div>
-                                <div className="flex items-center gap-1.5 text-gray-500">
-                                    <ShieldCheck size={14} className={user.role === 'admin' ? "text-primary-normal" : "text-gray-300"} />
-                                    <span className="text-xs capitalize">{user.role}</span>
-                                </div>
-                            </div>
 
-                            <div className="flex items-center gap-3 ml-auto sm:ml-0">
+                                {/* Name / Username */}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-gray-800 truncate">{user.full_name || "Unnamed User"}</p>
+                                    <p className="text-xs text-gray-400 truncate">@{user.username || "no-username"}</p>
+                                </div>
+
+                                {/* Phone */}
+                                <div className="hidden md:flex items-center gap-1.5 text-gray-400 text-xs shrink-0">
+                                    <Phone size={12} />
+                                    <span>{user.phone_number || "—"}</span>
+                                </div>
+
+                                {/* Role badge */}
+                                <div className="hidden lg:block shrink-0">
+                                    <span className={`text-[0.6rem] font-bold px-2.5 py-1 rounded-full capitalize ${user.role === 'admin' ? 'bg-primary-light text-primary-normal' : 'bg-gray-100 text-gray-500'
+                                        }`}>{user.role || "user"}</span>
+                                </div>
+
+                                {/* Status toggle */}
                                 <button
                                     onClick={() => toggleUserStatus(user.id, user.is_active)}
-                                    className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-[0.65rem] sm:text-[0.7rem] font-bold transition-all ${user.is_active
-                                        ? "bg-green-50 text-green-600 hover:bg-red-50 hover:text-red-600"
-                                        : "bg-red-50 text-red-600 hover:bg-green-50 hover:text-green-600"
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[0.65rem] font-bold transition-all shrink-0 ${user.is_active
+                                            ? "bg-emerald-50 text-emerald-600 hover:bg-red-50 hover:text-red-600"
+                                            : "bg-red-50 text-red-600 hover:bg-emerald-50 hover:text-emerald-600"
                                         }`}
                                 >
-                                    {user.is_active ? <ShieldCheck size={14} /> : <ShieldAlert size={14} />}
+                                    {user.is_active ? <ShieldCheck size={12} /> : <ShieldAlert size={12} />}
                                     {user.is_active ? "Active" : "Blocked"}
                                 </button>
-                                <button className="p-2 text-gray-400 hover:bg-gray-50 rounded-lg group-hover:text-gray-600">
-                                    <MoreVertical size={18} />
+
+                                <button className="p-1.5 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-all opacity-0 group-hover:opacity-100 shrink-0">
+                                    <MoreVertical size={15} />
                                 </button>
-                            </div>
-                        </div>
-                    </motion.div>
-                ))}
-            </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

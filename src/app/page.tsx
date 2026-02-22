@@ -1,276 +1,210 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
-  Users,
-  Package,
-  Map as CampIcon,
-  MessageSquare,
-  LayoutDashboard,
-  LogOut,
-  ShieldCheck,
-  TrendingUp,
-  Search,
-  Bell,
-  Menu,
-  X,
-  Compass
+  Users, Package, Map as CampIcon, MessageSquare, LayoutDashboard,
+  LogOut, ShieldCheck, TrendingUp, Search, Bell, Menu, X, Compass,
+  ChevronRight
 } from "lucide-react";
-
 import UserManagement from "@/components/admin/UserManagement";
 import PackageManagement from "@/components/admin/PackageManagement";
 import CampManagement from "@/components/admin/CampManagement";
 import PostManagement from "@/components/admin/PostManagement";
 import ChatManagement from "@/components/admin/ChatManagement";
 import TripManagement from "@/components/admin/TripManagement";
+import { useQuery } from "@tanstack/react-query";
+import api from "@/utils/axios";
+
+const NAV = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, badge: null },
+  { id: "users", label: "Users", icon: Users, badge: null },
+  { id: "packages", label: "Packages", icon: Package, badge: null },
+  { id: "camps", label: "Camps", icon: CampIcon, badge: null },
+  { id: "trips", label: "Community Trips", icon: Compass, badge: null },
+  { id: "posts", label: "Post Moderation", icon: TrendingUp, badge: null },
+  { id: "chats", label: "User Chats", icon: MessageSquare, badge: null },
+];
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+  };
+
+  const activeNav = NAV.find(n => n.id === activeTab);
 
   const renderContent = () => {
     switch (activeTab) {
-      case "dashboard":
-        return <DashboardOverview />;
-      case "users":
-        return <UserManagement />;
-      case "packages":
-        return <PackageManagement />;
-      case "camps":
-        return <CampManagement />;
-      case "trips":
-        return <TripManagement />;
-      case "posts":
-        return <PostManagement />;
-      case "chats":
-        return <ChatManagement />;
-      default:
-        return <DashboardOverview />;
+      case "dashboard": return <DashboardOverview />;
+      case "users": return <UserManagement />;
+      case "packages": return <PackageManagement />;
+      case "camps": return <CampManagement />;
+      case "trips": return <TripManagement />;
+      case "posts": return <PostManagement />;
+      case "chats": return <ChatManagement />;
+      default: return <DashboardOverview />;
     }
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 font-sans relative">
-      {/* Sidebar Overlay for Mobile */}
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
+    <div className="flex h-screen bg-[#F4F6F8] font-sans">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300 lg:relative lg:translate-x-0
-        ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}
+        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-100 flex flex-col transition-transform duration-300 lg:relative lg:translate-x-0
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
-        <div className="p-6 flex items-center justify-between">
+        {/* Logo */}
+        <div className="h-16 flex items-center justify-between px-6 border-b border-gray-50">
           <div className="flex items-center gap-3">
-            <div className="bg-primary-normal p-2 rounded-lg">
-              <ShieldCheck className="text-white" size={24} />
+            <div className="h-8 w-8 rounded-xl bg-primary-normal flex items-center justify-center">
+              <ShieldCheck size={16} className="text-white" />
             </div>
-            <span className="text-xl font-bold text-gray-800 tracking-tight">Unzolo Admin</span>
+            <span className="font-bold text-gray-800 tracking-tight">Unzolo Admin</span>
           </div>
-          <button
-            className="lg:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
-            onClick={() => setIsSidebarOpen(false)}
-          >
-            <X size={20} />
+          <button className="lg:hidden p-1.5 rounded-lg text-gray-400 hover:bg-gray-50" onClick={() => setSidebarOpen(false)}>
+            <X size={18} />
           </button>
         </div>
 
-        <nav className="flex-1 px-4 space-y-2 mt-4">
-          <NavItem
-            icon={LayoutDashboard}
-            label="Dashboard"
-            active={activeTab === "dashboard"}
-            onClick={() => {
-              setActiveTab("dashboard");
-              setIsSidebarOpen(false);
-            }}
-          />
-          <NavItem
-            icon={Users}
-            label="User Management"
-            active={activeTab === "users"}
-            onClick={() => {
-              setActiveTab("users");
-              setIsSidebarOpen(false);
-            }}
-          />
-          <NavItem
-            icon={TrendingUp}
-            label="Post Moderation"
-            active={activeTab === "posts"}
-            onClick={() => {
-              setActiveTab("posts");
-              setIsSidebarOpen(false);
-            }}
-          />
-          <NavItem
-            icon={Package}
-            label="Packages"
-            active={activeTab === "packages"}
-            onClick={() => {
-              setActiveTab("packages");
-              setIsSidebarOpen(false);
-            }}
-          />
-          <NavItem
-            icon={CampIcon}
-            label="Camps"
-            active={activeTab === "camps"}
-            onClick={() => {
-              setActiveTab("camps");
-              setIsSidebarOpen(false);
-            }}
-          />
-          <NavItem
-            icon={Compass}
-            label="Community Trips"
-            active={activeTab === "trips"}
-            onClick={() => {
-              setActiveTab("trips");
-              setIsSidebarOpen(false);
-            }}
-          />
-          <NavItem
-            icon={MessageSquare}
-            label="User Chats"
-            active={activeTab === "chats"}
-            onClick={() => {
-              setActiveTab("chats");
-              setIsSidebarOpen(false);
-            }}
-          />
+        {/* Nav */}
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          <p className="text-[0.6rem] font-bold uppercase tracking-widest text-gray-300 px-3 mb-3">Menu</p>
+          {NAV.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all group ${isActive
+                  ? "bg-primary-normal text-white shadow-sm"
+                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                  }`}
+              >
+                <item.icon size={17} />
+                <span className="flex-1 text-left">{item.label}</span>
+                {isActive && <ChevronRight size={13} className="opacity-70" />}
+              </button>
+            );
+          })}
         </nav>
 
-        <div className="p-4 border-t border-gray-100">
-          <button className="flex items-center gap-3 w-full px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-            <LogOut size={20} />
-            <span className="font-medium">Logout</span>
+        {/* Admin badge + logout */}
+        <div className="p-4 border-t border-gray-50 space-y-2">
+          <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-gray-50">
+            <div className="h-8 w-8 rounded-xl bg-primary-light flex items-center justify-center text-primary-normal font-bold text-sm shrink-0">A</div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-gray-700 truncate">Super Admin</p>
+              <p className="text-[0.6rem] text-gray-400">full access</p>
+            </div>
+          </div>
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 text-red-500 hover:bg-red-50 rounded-xl text-sm font-semibold transition-all">
+            <LogOut size={16} />
+            Logout
           </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
-        {/* Header */}
-        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-10 gap-4">
-          <div className="flex items-center gap-4 flex-1">
-            <button
-              className="lg:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
-              onClick={() => setIsSidebarOpen(true)}
-            >
-              <Menu size={24} />
-            </button>
-            <div className="relative flex-1 max-w-96">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-extralight" size={18} />
-              <input
-                type="text"
-                placeholder="Search anything..."
-                className="w-full bg-gray-50 border-none rounded-lg py-2.5 pl-10 pr-4 focus:ring-2 focus:ring-primary-light transition-all text-sm shadow-sm"
-              />
-            </div>
+      {/* Main */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        {/* Top Nav */}
+        <header className="h-16 bg-white border-b border-gray-100 flex items-center px-4 lg:px-8 gap-4 flex-shrink-0">
+          <button className="lg:hidden p-2 rounded-xl text-gray-400 hover:bg-gray-50" onClick={() => setSidebarOpen(true)}>
+            <Menu size={20} />
+          </button>
+          <div className="hidden sm:flex items-center gap-2">
+            <span className="text-[0.6rem] font-bold uppercase tracking-widest text-gray-300">Portal</span>
+            <span className="text-gray-200">/</span>
+            <span className="text-xs font-semibold text-gray-600">{activeNav?.label}</span>
           </div>
-
-          <div className="flex items-center gap-2 lg:gap-4">
-            <button className="p-2 text-gray-400 hover:bg-gray-50 rounded-full relative">
-              <Bell size={20} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
-            <div className="h-10 w-10 rounded-full bg-primary-light flex items-center justify-center text-primary-normal font-bold">
-              A
-            </div>
+          <div className="flex-1" />
+          <div className="relative w-52 hidden md:block">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
+            <input placeholder="Search..." className="w-full h-9 bg-gray-50 rounded-xl pl-9 pr-4 text-sm border border-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-normal/20 focus:border-primary-normal transition-all placeholder:text-gray-300" />
           </div>
+          <button className="relative p-2 rounded-xl hover:bg-gray-50 transition-all text-gray-400">
+            <Bell size={18} />
+            <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full ring-2 ring-white" />
+          </button>
         </header>
 
-        {/* Dashboard Content */}
-        <div className="p-4 lg:p-8">
-          {renderContent()}
-        </div>
-      </main>
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-4 md:p-8">
+            {renderContent()}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
 
-import { useQuery } from "@tanstack/react-query";
-import api from "@/utils/axios";
+// ─── Dashboard Overview ───────────────────────────────────────────────────────
 
 function DashboardOverview() {
   const { data: statsData, isLoading } = useQuery({
     queryKey: ["adminStats"],
-    queryFn: async () => {
-      const res = await api.get("/admin/stats");
-      return res.data;
-    }
+    queryFn: async () => { const res = await api.get("/admin/stats"); return res.data; }
   });
 
   const stats = [
-    { label: "Total Users", value: statsData?.stats?.userCount?.toLocaleString() || "0", icon: Users, color: "text-blue-600" },
-    { label: "Active Packages", value: statsData?.stats?.packageCount?.toLocaleString() || "0", icon: Package, color: "text-green-600" },
-    { label: "Camps Hosted", value: statsData?.stats?.campCount?.toLocaleString() || "0", icon: CampIcon, color: "text-amber-600" },
-    { label: "Total Trips", value: statsData?.stats?.tripCount?.toLocaleString() || "0", icon: Compass, color: "text-blue-500" },
-    { label: "Total Posts", value: statsData?.stats?.postCount?.toLocaleString() || "0", icon: TrendingUp, color: "text-purple-600" },
+    { label: "Total Users", value: statsData?.stats?.userCount ?? 0, icon: Users, from: "from-blue-500", to: "to-blue-600", light: "bg-blue-50", text: "text-blue-600" },
+    { label: "Active Packages", value: statsData?.stats?.packageCount ?? 0, icon: Package, from: "from-emerald-500", to: "to-emerald-600", light: "bg-emerald-50", text: "text-emerald-600" },
+    { label: "Camps Hosted", value: statsData?.stats?.campCount ?? 0, icon: CampIcon, from: "from-amber-500", to: "to-amber-600", light: "bg-amber-50", text: "text-amber-600" },
+    { label: "Community Trips", value: statsData?.stats?.tripCount ?? 0, icon: Compass, from: "from-purple-500", to: "to-purple-600", light: "bg-purple-50", text: "text-purple-600" },
+    { label: "Total Posts", value: statsData?.stats?.postCount ?? 0, icon: TrendingUp, from: "from-pink-500", to: "to-pink-600", light: "bg-pink-50", text: "text-pink-600" },
   ];
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-normal"></div>
+  if (isLoading) return (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <div className="space-y-3 text-center">
+        <div className="h-12 w-12 rounded-2xl bg-primary-light mx-auto flex items-center justify-center">
+          <div className="h-5 w-5 rounded-full border-2 border-primary-normal border-t-transparent animate-spin" />
+        </div>
+        <p className="text-xs text-gray-400 font-semibold">Loading dashboard...</p>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
-    <>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-800 capitalize">Overview</h1>
-          <p className="text-gray-500 text-xs sm:text-sm">Welcome back, here's what's happening today.</p>
-        </div>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Overview</h1>
+        <p className="text-sm text-gray-400 mt-1">Welcome back — here's what's happening today.</p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
-        {stats.map((stat, idx) => (
-          <div key={idx} className="bg-white p-5 sm:p-6 rounded-lg border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <div className={`${stat.color} bg-opacity-10 p-2.5 sm:p-3 rounded-lg bg-current`}>
-                <stat.icon size={20} className="sm:size-6" />
-              </div>
-              <span className="text-xs font-bold text-green-500">+Real-time</span>
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        {stats.map((stat, i) => (
+          <div key={i} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all group">
+            <div className={`h-10 w-10 rounded-xl ${stat.light} flex items-center justify-center mb-4`}>
+              <stat.icon size={18} className={stat.text} />
             </div>
-            <h3 className="text-2xl sm:text-3xl font-bold text-gray-800">{stat.value}</h3>
-            <p className="text-gray-400 text-xs sm:text-sm mt-1">{stat.label}</p>
+            <p className="text-2xl font-bold text-gray-900">{stat.value.toLocaleString()}</p>
+            <p className="text-xs text-gray-400 mt-1 font-medium">{stat.label}</p>
           </div>
         ))}
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-8 min-h-[400px] flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="bg-primary-light size-16 rounded-full flex items-center justify-center mx-auto">
-            <TrendingUp className="text-primary-normal" size={32} />
-          </div>
-          <h2 className="text-xl font-bold text-gray-800">Growth Tracking</h2>
-          <p className="text-gray-400 max-w-sm">Analytics and growth charts will be integrated in the next phase.</p>
+      {/* Placeholder chart */}
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 min-h-[320px] flex flex-col items-center justify-center gap-4">
+        <div className="h-16 w-16 rounded-2xl bg-primary-light flex items-center justify-center">
+          <TrendingUp size={28} className="text-primary-normal" />
+        </div>
+        <div className="text-center">
+          <h2 className="text-lg font-bold text-gray-800">Analytics Coming Soon</h2>
+          <p className="text-sm text-gray-400 mt-1 max-w-xs">Growth charts and detailed analytics will be integrated in the next phase.</p>
         </div>
       </div>
-    </>
-  )
-}
-
-function NavItem({ icon: Icon, label, active, onClick }: { icon: any, label: string, active: boolean, onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-3 w-full px-4 py-3.5 rounded-lg transition-all duration-200 ${active
-        ? "bg-primary-normal text-white shadow-lg shadow-primary-light/50"
-        : "text-gray-500 hover:bg-gray-50 hover:text-primary-normal"
-        }`}
-    >
-      <Icon size={20} />
-      <span className="font-semibold text-sm">{label}</span>
-    </button>
+    </div>
   );
 }
