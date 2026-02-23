@@ -18,12 +18,21 @@ async function handler(
   const cookieStore = await cookies();
   const token = cookieStore.get("admin_token")?.value;
 
+  if (!token) {
+    console.log("[Proxy] No token found in cookies");
+    return NextResponse.json(
+      { success: false, message: "No admin token provided. Please log in." },
+      { status: 401 }
+    );
+  }
+
+  console.log(`[Proxy] Using token: ${token.substring(0, 10)}... for backend: ${BACKEND}`);
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "Authorization": `Bearer ${token}`,
+    "X-Forwarded-For": request.headers.get("x-forwarded-for") || "",
   };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
 
   // Forward body for non-GET requests
   let body: string | undefined;
@@ -35,12 +44,16 @@ async function handler(
     }
   }
 
+  console.log(`[Proxy] Forwarding ${request.method} ${targetUrl}`);
+
   try {
     const res = await fetch(targetUrl, {
       method: request.method,
       headers,
       body,
     });
+
+    console.log(`[Proxy] Backend returned ${res.status}`);
 
     const contentType = res.headers.get("content-type") || "";
     let data: unknown;
