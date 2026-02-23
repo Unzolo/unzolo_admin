@@ -1,14 +1,34 @@
 "use client";
 
-import React from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "../../utils/axios";
 import { Heart, MessageCircle, Trash2, Eye, User as UserIcon, Flag, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import SearchFilterBar from "../ui/SearchFilterBar";
+
+const FILTERS = [
+    { label: "All", value: "all" },
+    { label: "Has Media", value: "media" },
+    { label: "Text only", value: "text" },
+    { label: "Popular (10+ likes)", value: "popular" },
+];
+
+const SORT_OPTIONS = [
+    { label: "Newest first", value: "newest" },
+    { label: "Oldest first", value: "oldest" },
+    { label: "Most liked", value: "likes_desc" },
+    { label: "Most commented", value: "comments_desc" },
+    { label: "Most viewed", value: "views_desc" },
+];
 
 export default function PostManagement() {
+    const [search, setSearch] = useState("");
+    const [filter, setFilter] = useState("all");
+    const [sort, setSort] = useState("newest");
+
     const { data, isLoading, refetch } = useQuery({
         queryKey: ["adminPosts"],
         queryFn: async () => { const { data } = await api.get("/admin/posts"); return data; },
@@ -23,6 +43,31 @@ export default function PostManagement() {
         } catch { toast.error("Failed to delete post"); }
     };
 
+
+    const allPosts: any[] = data?.posts || [];
+
+    const displayed = useMemo(() => {
+        let list = [...allPosts];
+        const q = search.toLowerCase();
+
+        if (q) list = list.filter(p =>
+            (p.content || "").toLowerCase().includes(q) ||
+            (p.author?.username || "").toLowerCase().includes(q)
+        );
+
+        if (filter === "media") list = list.filter(p => p.media && p.media.length > 0);
+        if (filter === "text") list = list.filter(p => !p.media || p.media.length === 0);
+        if (filter === "popular") list = list.filter(p => (p.likesCount || 0) >= 10);
+
+        if (sort === "newest") list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        if (sort === "oldest") list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        if (sort === "likes_desc") list.sort((a, b) => (b.likesCount || 0) - (a.likesCount || 0));
+        if (sort === "comments_desc") list.sort((a, b) => (b.commentsCount || 0) - (a.commentsCount || 0));
+        if (sort === "views_desc") list.sort((a, b) => (b.views || 0) - (a.views || 0));
+
+        return list;
+    }, [allPosts, search, filter, sort]);
+
     if (isLoading) return (
         <div className="flex flex-col items-center justify-center min-h-[300px] gap-3">
             <Loader2 size={28} className="text-purple-500 animate-spin" />
@@ -30,25 +75,37 @@ export default function PostManagement() {
         </div>
     );
 
-    const posts = data?.posts || [];
-
     return (
         <div className="space-y-6">
             <div>
                 <h2 className="text-xl font-bold text-gray-900">Post Moderation</h2>
-                <p className="text-xs text-gray-400 mt-0.5">{posts.length} posts to review</p>
+                <p className="text-xs text-gray-400 mt-0.5">{allPosts.length} posts to review</p>
             </div>
 
-            {posts.length === 0 ? (
+            <SearchFilterBar
+                search={search}
+                onSearchChange={setSearch}
+                placeholder="Search by content or author…"
+                filters={FILTERS}
+                activeFilter={filter}
+                onFilterChange={setFilter}
+                sortOptions={SORT_OPTIONS}
+                activeSort={sort}
+                onSortChange={setSort}
+                total={allPosts.length}
+                filtered={displayed.length}
+            />
+
+            {displayed.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-16 flex flex-col items-center gap-3 text-center">
                     <div className="h-14 w-14 rounded-2xl bg-purple-50 flex items-center justify-center">
                         <Flag size={24} className="text-purple-200" />
                     </div>
-                    <p className="text-sm text-gray-400">No posts to moderate.</p>
+                    <p className="text-sm text-gray-400">{search || filter !== "all" ? "No posts match your filters." : "No posts to moderate."}</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {posts.map((post: any, i: number) => (
+                    {displayed.map((post: any, i: number) => (
                         <motion.div
                             key={post.id}
                             initial={{ opacity: 0, y: 12 }}

@@ -1,12 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "../../utils/axios";
 import { Compass, MapPin, IndianRupee, Trash2, Calendar, Users, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import SearchFilterBar from "../ui/SearchFilterBar";
 
 const TRAVEL_TYPE_COLORS: Record<string, string> = {
     luxury: "bg-amber-100 text-amber-700",
@@ -14,7 +15,29 @@ const TRAVEL_TYPE_COLORS: Record<string, string> = {
     digital_nomad: "bg-purple-100 text-purple-700",
 };
 
+const FILTERS = [
+    { label: "All", value: "all" },
+    { label: "Active", value: "active" },
+    { label: "Inactive", value: "inactive" },
+    { label: "Luxury", value: "luxury" },
+    { label: "Non-luxury", value: "non_luxury" },
+    { label: "Digital Nomad", value: "digital_nomad" },
+];
+
+const SORT_OPTIONS = [
+    { label: "Newest first", value: "newest" },
+    { label: "Oldest first", value: "oldest" },
+    { label: "Price: Low → High", value: "price_asc" },
+    { label: "Price: High → Low", value: "price_desc" },
+    { label: "Most members", value: "members_desc" },
+    { label: "Title A–Z", value: "title_asc" },
+];
+
 export default function TripManagement() {
+    const [search, setSearch] = useState("");
+    const [filter, setFilter] = useState("all");
+    const [sort, setSort] = useState("newest");
+
     const { data, isLoading, refetch } = useQuery({
         queryKey: ["adminTrips"],
         queryFn: async () => { const { data } = await api.get("/admin/trips"); return data; },
@@ -29,6 +52,33 @@ export default function TripManagement() {
         } catch { toast.error("Failed to delete trip"); }
     };
 
+
+    const allTrips: any[] = data?.trips || [];
+
+    const displayed = useMemo(() => {
+        let list = [...allTrips];
+        const q = search.toLowerCase();
+
+        if (q) list = list.filter(t =>
+            (t.title || "").toLowerCase().includes(q) ||
+            (t.destination || "").toLowerCase().includes(q) ||
+            (t.creator?.username || "").toLowerCase().includes(q)
+        );
+
+        if (filter === "active") list = list.filter(t => t.is_active);
+        if (filter === "inactive") list = list.filter(t => !t.is_active);
+        if (["luxury", "non_luxury", "digital_nomad"].includes(filter)) list = list.filter(t => t.travel_type === filter);
+
+        if (sort === "newest") list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        if (sort === "oldest") list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        if (sort === "price_asc") list.sort((a, b) => (a.cost || 0) - (b.cost || 0));
+        if (sort === "price_desc") list.sort((a, b) => (b.cost || 0) - (a.cost || 0));
+        if (sort === "members_desc") list.sort((a, b) => (b.max_members || 0) - (a.max_members || 0));
+        if (sort === "title_asc") list.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+
+        return list;
+    }, [allTrips, search, filter, sort]);
+
     if (isLoading) return (
         <div className="flex flex-col items-center justify-center min-h-[300px] gap-3">
             <Loader2 size={28} className="text-purple-500 animate-spin" />
@@ -36,25 +86,37 @@ export default function TripManagement() {
         </div>
     );
 
-    const trips = data?.trips || [];
-
     return (
         <div className="space-y-6">
             <div>
                 <h2 className="text-xl font-bold text-gray-900">Community Trips</h2>
-                <p className="text-xs text-gray-400 mt-0.5">{trips.length} user-created trips</p>
+                <p className="text-xs text-gray-400 mt-0.5">{allTrips.length} user-created trips</p>
             </div>
 
-            {trips.length === 0 ? (
+            <SearchFilterBar
+                search={search}
+                onSearchChange={setSearch}
+                placeholder="Search by title, destination or creator…"
+                filters={FILTERS}
+                activeFilter={filter}
+                onFilterChange={setFilter}
+                sortOptions={SORT_OPTIONS}
+                activeSort={sort}
+                onSortChange={setSort}
+                total={allTrips.length}
+                filtered={displayed.length}
+            />
+
+            {displayed.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-16 flex flex-col items-center gap-3 text-center">
                     <div className="h-14 w-14 rounded-2xl bg-blue-50 flex items-center justify-center">
                         <Compass size={24} className="text-blue-200" />
                     </div>
-                    <p className="text-sm text-gray-400">No community trips found.</p>
+                    <p className="text-sm text-gray-400">{search || filter !== "all" ? "No trips match your filters." : "No community trips found."}</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {trips.map((trip: any, i: number) => (
+                    {displayed.map((trip: any, i: number) => (
                         <motion.div
                             key={trip.id}
                             initial={{ opacity: 0, y: 12 }}

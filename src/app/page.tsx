@@ -40,14 +40,14 @@ export default function AdminDashboard() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case "dashboard": return <DashboardOverview />;
+      case "dashboard": return <DashboardOverview onNavigate={setActiveTab} />;
       case "users": return <UserManagement />;
       case "packages": return <PackageManagement />;
       case "camps": return <CampManagement />;
       case "trips": return <TripManagement />;
       case "posts": return <PostManagement />;
       case "chats": return <ChatManagement />;
-      default: return <DashboardOverview />;
+      default: return <DashboardOverview onNavigate={setActiveTab} />;
     }
   };
 
@@ -150,18 +150,18 @@ export default function AdminDashboard() {
 
 // ─── Dashboard Overview ───────────────────────────────────────────────────────
 
-function DashboardOverview() {
+function DashboardOverview({ onNavigate }: { onNavigate: (tab: string) => void }) {
   const { data: statsData, isLoading } = useQuery({
     queryKey: ["adminStats"],
     queryFn: async () => { const res = await api.get("/admin/stats"); return res.data; }
   });
 
   const stats = [
-    { label: "Total Users", value: statsData?.stats?.userCount ?? 0, icon: Users, from: "from-blue-500", to: "to-blue-600", light: "bg-blue-50", text: "text-blue-600" },
-    { label: "Active Packages", value: statsData?.stats?.packageCount ?? 0, icon: Package, from: "from-emerald-500", to: "to-emerald-600", light: "bg-emerald-50", text: "text-emerald-600" },
-    { label: "Camps Hosted", value: statsData?.stats?.campCount ?? 0, icon: CampIcon, from: "from-amber-500", to: "to-amber-600", light: "bg-amber-50", text: "text-amber-600" },
-    { label: "Community Trips", value: statsData?.stats?.tripCount ?? 0, icon: Compass, from: "from-purple-500", to: "to-purple-600", light: "bg-purple-50", text: "text-purple-600" },
-    { label: "Total Posts", value: statsData?.stats?.postCount ?? 0, icon: TrendingUp, from: "from-pink-500", to: "to-pink-600", light: "bg-pink-50", text: "text-pink-600" },
+    { label: "Total Users", value: statsData?.stats?.userCount ?? 0, icon: Users, from: "from-blue-500", to: "to-blue-600", light: "bg-blue-50", text: "text-blue-600", tab: "users" },
+    { label: "Active Packages", value: statsData?.stats?.packageCount ?? 0, icon: Package, from: "from-emerald-500", to: "to-emerald-600", light: "bg-emerald-50", text: "text-emerald-600", tab: "packages" },
+    { label: "Camps Hosted", value: statsData?.stats?.campCount ?? 0, icon: CampIcon, from: "from-amber-500", to: "to-amber-600", light: "bg-amber-50", text: "text-amber-600", tab: "camps" },
+    { label: "Community Trips", value: statsData?.stats?.tripCount ?? 0, icon: Compass, from: "from-purple-500", to: "to-purple-600", light: "bg-purple-50", text: "text-purple-600", tab: "trips" },
+    { label: "Total Posts", value: statsData?.stats?.postCount ?? 0, icon: TrendingUp, from: "from-pink-500", to: "to-pink-600", light: "bg-pink-50", text: "text-pink-600", tab: "posts" },
   ];
 
   if (isLoading) return (
@@ -185,13 +185,20 @@ function DashboardOverview() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {stats.map((stat, i) => (
-          <div key={i} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all group">
-            <div className={`h-10 w-10 rounded-xl ${stat.light} flex items-center justify-center mb-4`}>
-              <stat.icon size={18} className={stat.text} />
+          <button
+            key={i}
+            onClick={() => onNavigate(stat.tab)}
+            className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all group text-left w-full cursor-pointer"
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className={`h-10 w-10 rounded-xl ${stat.light} flex items-center justify-center`}>
+                <stat.icon size={18} className={stat.text} />
+              </div>
+              <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500 group-hover:translate-x-0.5 transition-all mt-1" />
             </div>
             <p className="text-2xl font-bold text-gray-900">{stat.value.toLocaleString()}</p>
             <p className="text-xs text-gray-400 mt-1 font-medium">{stat.label}</p>
-          </div>
+          </button>
         ))}
       </div>
 

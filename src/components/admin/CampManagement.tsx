@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "../../utils/axios";
 import { useRouter } from "next/navigation";
@@ -8,9 +8,28 @@ import { Map as CampIcon, MapPin, IndianRupee, Trash2, Edit3, Plus, Calendar, Lo
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import SearchFilterBar from "../ui/SearchFilterBar";
+
+const FILTERS = [
+    { label: "All", value: "all" },
+    { label: "Upcoming", value: "upcoming" },
+    { label: "Past", value: "past" },
+];
+
+const SORT_OPTIONS = [
+    { label: "Newest first", value: "newest" },
+    { label: "Oldest first", value: "oldest" },
+    { label: "Price: Low → High", value: "price_asc" },
+    { label: "Price: High → Low", value: "price_desc" },
+    { label: "Title A–Z", value: "title_asc" },
+];
 
 export default function CampManagement() {
     const router = useRouter();
+    const [search, setSearch] = useState("");
+    const [filter, setFilter] = useState("all");
+    const [sort, setSort] = useState("newest");
+
     const { data, isLoading, refetch } = useQuery({
         queryKey: ["adminCamps"],
         queryFn: async () => { const { data } = await api.get("/admin/camps"); return data; },
@@ -25,22 +44,61 @@ export default function CampManagement() {
         } catch { toast.error("Failed to delete camp"); }
     };
 
-    if (isLoading) return <PageLoader label="Loading camps..." />;
 
-    const camps = data?.camps || [];
+    const allCamps: any[] = data?.camps || [];
+
+    const displayed = useMemo(() => {
+        let list = [...allCamps];
+        const q = search.toLowerCase();
+        const now = new Date();
+
+        if (q) list = list.filter(c =>
+            (c.title || "").toLowerCase().includes(q) ||
+            (c.destination || "").toLowerCase().includes(q) ||
+            (c.creator?.username || "").toLowerCase().includes(q)
+        );
+
+        if (filter === "upcoming") list = list.filter(c => c.start_date && new Date(c.start_date) >= now);
+        if (filter === "past") list = list.filter(c => c.start_date && new Date(c.start_date) < now);
+
+        if (sort === "newest") list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        if (sort === "oldest") list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        if (sort === "price_asc") list.sort((a, b) => (a.cost || 0) - (b.cost || 0));
+        if (sort === "price_desc") list.sort((a, b) => (b.cost || 0) - (a.cost || 0));
+        if (sort === "title_asc") list.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+
+        return list;
+    }, [allCamps, search, filter, sort]);
+
+    if (isLoading) return <PageLoader label="Loading camps..." />;
 
     return (
         <div className="space-y-6">
             <PageHeader
                 title="Camps"
-                count={camps.length}
+                count={allCamps.length}
                 action={{ label: "Host New Camp", onClick: () => router.push("/camps/create"), color: "amber" }}
             />
-            {camps.length === 0 ? (
-                <EmptyState icon={CampIcon} message="No camps yet. Host your first one!" />
+
+            <SearchFilterBar
+                search={search}
+                onSearchChange={setSearch}
+                placeholder="Search by title, destination or host…"
+                filters={FILTERS}
+                activeFilter={filter}
+                onFilterChange={setFilter}
+                sortOptions={SORT_OPTIONS}
+                activeSort={sort}
+                onSortChange={setSort}
+                total={allCamps.length}
+                filtered={displayed.length}
+            />
+
+            {displayed.length === 0 ? (
+                <EmptyState icon={CampIcon} message={search || filter !== "all" ? "No camps match your filters." : "No camps yet. Host your first one!"} />
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {camps.map((camp: any, i: number) => (
+                    {displayed.map((camp: any, i: number) => (
                         <motion.div
                             key={camp.id}
                             initial={{ opacity: 0, y: 12 }}

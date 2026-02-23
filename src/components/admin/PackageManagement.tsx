@@ -1,16 +1,17 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "../../utils/axios";
 import { useRouter } from "next/navigation";
 import {
     Package as PackageIcon, MapPin, IndianRupee, Trash2, Edit3,
-    Plus, Calendar, Users, Loader2, Tag, Clock, ChevronRight, AlertTriangle, X
+    Plus, Calendar, Loader2, Clock, AlertTriangle, X
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import SearchFilterBar from "../ui/SearchFilterBar";
 
 // ─── Delete Confirm Modal ─────────────────────────────────────────────────────
 
@@ -97,7 +98,7 @@ function PackageCard({ pkg, onEdit, onDelete }: { pkg: any; onEdit: () => void; 
                     )}
                 </div>
 
-                {/* Action buttons — always visible bottom-right */}
+                {/* Action buttons */}
                 <div className="absolute bottom-3 right-3 flex gap-2">
                     <button
                         onClick={onEdit}
@@ -116,7 +117,7 @@ function PackageCard({ pkg, onEdit, onDelete }: { pkg: any; onEdit: () => void; 
                     </button>
                 </div>
 
-                {/* Duration chip bottom-left */}
+                {/* Duration chip */}
                 {nights !== null && nights > 0 && (
                     <div className="absolute bottom-3 left-3">
                         <span className="flex items-center gap-1 text-[0.6rem] font-bold px-2.5 py-1 rounded-full bg-black/50 text-white backdrop-blur-sm">
@@ -186,12 +187,33 @@ function PackageCard({ pkg, onEdit, onDelete }: { pkg: any; onEdit: () => void; 
     );
 }
 
+// ─── Sort / Filter config ─────────────────────────────────────────────────────
+
+const FILTERS = [
+    { label: "All", value: "all" },
+    { label: "Discounted", value: "discount" },
+    { label: "Luxury", value: "luxury" },
+    { label: "Non-luxury", value: "non_luxury" },
+    { label: "Digital Nomad", value: "digital_nomad" },
+];
+
+const SORT_OPTIONS = [
+    { label: "Newest first", value: "newest" },
+    { label: "Oldest first", value: "oldest" },
+    { label: "Price: Low → High", value: "price_asc" },
+    { label: "Price: High → Low", value: "price_desc" },
+    { label: "Title A–Z", value: "title_asc" },
+];
+
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 export default function PackageManagement() {
     const router = useRouter();
     const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
+    const [search, setSearch] = useState("");
+    const [filter, setFilter] = useState("all");
+    const [sort, setSort] = useState("newest");
 
     const { data, isLoading, refetch } = useQuery({
         queryKey: ["adminPackages"],
@@ -213,6 +235,31 @@ export default function PackageManagement() {
         }
     };
 
+
+    const allPackages: any[] = data?.packages || [];
+
+    const displayed = useMemo(() => {
+        let list = [...allPackages];
+
+        const q = search.toLowerCase();
+        if (q) list = list.filter(p =>
+            (p.title || "").toLowerCase().includes(q) ||
+            (p.destination || "").toLowerCase().includes(q) ||
+            (p.creator?.username || "").toLowerCase().includes(q)
+        );
+
+        if (filter === "discount") list = list.filter(p => (p.discount || 0) > 0);
+        else if (filter !== "all") list = list.filter(p => p.travel_type === filter);
+
+        if (sort === "newest") list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        if (sort === "oldest") list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        if (sort === "price_asc") list.sort((a, b) => (a.cost || 0) - (b.cost || 0));
+        if (sort === "price_desc") list.sort((a, b) => (b.cost || 0) - (a.cost || 0));
+        if (sort === "title_asc") list.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+
+        return list;
+    }, [allPackages, search, filter, sort]);
+
     if (isLoading) return (
         <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
             <div className="relative">
@@ -224,8 +271,6 @@ export default function PackageManagement() {
             <p className="text-sm text-gray-400 font-medium">Loading packages...</p>
         </div>
     );
-
-    const packages = data?.packages || [];
 
     return (
         <>
@@ -246,7 +291,7 @@ export default function PackageManagement() {
                     <div>
                         <h2 className="text-2xl font-bold text-gray-900">Packages</h2>
                         <p className="text-sm text-gray-400 mt-0.5">
-                            {packages.length} {packages.length === 1 ? "package" : "packages"} available
+                            {allPackages.length} {allPackages.length === 1 ? "package" : "packages"} available
                         </p>
                     </div>
                     <button
@@ -258,28 +303,46 @@ export default function PackageManagement() {
                     </button>
                 </div>
 
+                <SearchFilterBar
+                    search={search}
+                    onSearchChange={setSearch}
+                    placeholder="Search by title, destination or creator…"
+                    filters={FILTERS}
+                    activeFilter={filter}
+                    onFilterChange={setFilter}
+                    sortOptions={SORT_OPTIONS}
+                    activeSort={sort}
+                    onSortChange={setSort}
+                    total={allPackages.length}
+                    filtered={displayed.length}
+                />
+
                 {/* Empty state */}
-                {packages.length === 0 && (
+                {displayed.length === 0 && (
                     <div className="bg-white rounded-3xl border-2 border-dashed border-gray-200 p-20 flex flex-col items-center gap-4 text-center">
                         <div className="h-16 w-16 rounded-3xl bg-primary-light flex items-center justify-center">
                             <PackageIcon size={28} className="text-primary-normal" />
                         </div>
                         <div>
-                            <p className="font-semibold text-gray-700 mb-1">No packages yet</p>
-                            <p className="text-sm text-gray-400">Create your first travel package to get started.</p>
+                            <p className="font-semibold text-gray-700 mb-1">{search || filter !== "all" ? "No packages match your filters." : "No packages yet"}</p>
+                            {!search && filter === "all" && (
+                                <>
+                                    <p className="text-sm text-gray-400">Create your first travel package to get started.</p>
+                                    <button
+                                        onClick={() => router.push("/packages/create")}
+                                        className="flex items-center gap-2 h-9 px-4 rounded-xl bg-primary-normal text-white text-sm font-semibold hover:opacity-90 transition-all mt-4 mx-auto"
+                                    >
+                                        <Plus size={14} /> Create Package
+                                    </button>
+                                </>
+                            )}
                         </div>
-                        <button
-                            onClick={() => router.push("/packages/create")}
-                            className="flex items-center gap-2 h-9 px-4 rounded-xl bg-primary-normal text-white text-sm font-semibold hover:opacity-90 transition-all mt-2"
-                        >
-                            <Plus size={14} /> Create Package
-                        </button>
                     </div>
                 )}
 
                 {/* Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {packages.map((pkg: any, i: number) => (
+                    {displayed.map((pkg: any, i: number) => (
                         <motion.div key={pkg.id} transition={{ delay: i * 0.05 }}>
                             <PackageCard
                                 pkg={pkg}
