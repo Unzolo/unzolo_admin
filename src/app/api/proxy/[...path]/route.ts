@@ -44,8 +44,6 @@ async function handler(
     }
   }
 
-  console.log(`[Proxy] Forwarding ${request.method} ${targetUrl}`);
-
   try {
     const res = await fetch(targetUrl, {
       method: request.method,
@@ -53,19 +51,24 @@ async function handler(
       body,
     });
 
-    console.log(`[Proxy] Backend returned ${res.status}`);
-
     const contentType = res.headers.get("content-type") || "";
-    let data: unknown;
+    let data: any;
     if (contentType.includes("application/json")) {
       data = await res.json();
     } else {
       data = await res.text();
     }
 
+    console.log(`[Proxy] Backend returned ${res.status}`, data);
+
+    // If backend returns 403, it means the token was accepted but permissions failed
+    if (res.status === 403) {
+      console.error(`[Proxy] FORBIDDEN access to ${targetUrl}. Data:`, data);
+    }
+
     return NextResponse.json(data, { status: res.status });
-  } catch (err) {
-    console.error("[Proxy Error]", err);
+  } catch (err: any) {
+    console.error("[Proxy Error] Fetch failed:", err.message);
     return NextResponse.json(
       { success: false, message: "Proxy request failed" },
       { status: 502 }

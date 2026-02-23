@@ -31,6 +31,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Set cookies — httpOnly for middleware, readable for axios Bearer header
+    console.log("[Auth] Login successful for user:", verifyData.user?.phone_number, "Role:", verifyData.user?.role);
+    
     const response = NextResponse.json({
       success: true,
       user: verifyData.user,
