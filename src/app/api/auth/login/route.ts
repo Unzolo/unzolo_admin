@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "https://api.unzolo.com/api";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://staging.unzolo.com/api";
 
 export async function POST(request: NextRequest) {
   try {

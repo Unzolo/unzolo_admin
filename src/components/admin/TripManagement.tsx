@@ -52,6 +52,16 @@ export default function TripManagement() {
         } catch { toast.error("Failed to delete trip"); }
     };
 
+    const toggleTripModeration = async (tripId: number, currentModerated: boolean) => {
+        const action = !currentModerated ? "moderate" : "unmoderate";
+        if (!confirm(`Are you sure you want to ${action} this trip? ${!currentModerated ? "It will be hidden from the frontend." : ""}`)) return;
+        try {
+            await api.post("/admin/trips/moderate", { tripId, moderated: !currentModerated });
+            toast.success(`Trip ${!currentModerated ? "moderated and hidden" : "restored"}`);
+            refetch();
+        } catch { toast.error(`Failed to ${action} trip`); }
+    };
+
 
     const allTrips: any[] = data?.trips || [];
 
@@ -67,6 +77,7 @@ export default function TripManagement() {
 
         if (filter === "active") list = list.filter(t => t.is_active);
         if (filter === "inactive") list = list.filter(t => !t.is_active);
+        if (filter === "moderated") list = list.filter(t => t.is_moderated);
         if (["luxury", "non_luxury", "digital_nomad"].includes(filter)) list = list.filter(t => t.travel_type === filter);
 
         if (sort === "newest") list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -97,7 +108,7 @@ export default function TripManagement() {
                 search={search}
                 onSearchChange={setSearch}
                 placeholder="Search by title, destination or creator…"
-                filters={FILTERS}
+                filters={[...FILTERS, { label: "Moderated", value: "moderated" }]}
                 activeFilter={filter}
                 onFilterChange={setFilter}
                 sortOptions={SORT_OPTIONS}
@@ -122,7 +133,7 @@ export default function TripManagement() {
                             initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: i * 0.04 }}
-                            className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-lg hover:border-gray-200 transition-all group"
+                            className={`bg-white rounded-2xl border shadow-sm overflow-hidden hover:shadow-lg transition-all group ${trip.is_moderated ? 'border-red-100 bg-red-50/5' : 'border-gray-100'}`}
                         >
                             {/* Cover */}
                             <div className="relative h-44 bg-blue-50">
@@ -131,22 +142,37 @@ export default function TripManagement() {
                                     : <div className="w-full h-full flex items-center justify-center"><Compass size={40} className="text-blue-200" /></div>
                                 }
                                 <div className="absolute inset-0 bg-linear-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                                <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all translate-y-1 group-hover:translate-y-0">
+                                <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all translate-y-1 group-hover:translate-y-0">
                                     <button
                                         onClick={() => handleDelete(trip.id)}
                                         className="p-2 rounded-xl bg-white/90 backdrop-blur-sm text-red-500 hover:bg-red-500 hover:text-white shadow-sm transition-all"
+                                        title="Delete Trip"
                                     >
                                         <Trash2 size={14} />
                                     </button>
+                                    <button
+                                        onClick={() => toggleTripModeration(trip.id, !!trip.is_moderated)}
+                                        className={`p-2 rounded-xl bg-white/90 backdrop-blur-sm shadow-sm transition-all ${trip.is_moderated ? 'text-emerald-500 hover:bg-emerald-500 hover:text-white' : 'text-amber-500 hover:bg-amber-500 hover:text-white'}`}
+                                        title={trip.is_moderated ? "Restore Trip" : "Moderate Trip"}
+                                    >
+                                        <Flag size={14} />
+                                    </button>
                                 </div>
-                                <div className="absolute top-3 left-3 flex gap-1.5">
-                                    <span className={`text-[0.6rem] font-bold px-2 py-1 rounded-full ${trip.is_active ? 'bg-emerald-500 text-white' : 'bg-gray-400 text-white'}`}>
-                                        {trip.is_active ? "Active" : "Inactive"}
-                                    </span>
-                                    {trip.travel_type && (
-                                        <span className={`text-[0.6rem] font-bold px-2 py-1 rounded-full capitalize ${TRAVEL_TYPE_COLORS[trip.travel_type] || 'bg-gray-100 text-gray-600'}`}>
-                                            {trip.travel_type.replace("_", " ")}
+                                <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                                    <div className="flex gap-1.5">
+                                        <span className={`text-[0.6rem] font-bold px-2 py-1 rounded-full ${trip.is_active ? 'bg-emerald-500 text-white' : 'bg-gray-400 text-white'}`}>
+                                            {trip.is_active ? "Active" : "Inactive"}
                                         </span>
+                                        {trip.is_moderated && (
+                                            <span className="text-[0.6rem] font-bold bg-red-500 text-white px-2 py-1 rounded-full">MODERATED</span>
+                                        )}
+                                    </div>
+                                    {trip.travel_type && (
+                                        <div className="flex">
+                                            <span className={`text-[0.6rem] font-bold px-2 py-1 rounded-full capitalize ${TRAVEL_TYPE_COLORS[trip.travel_type] || 'bg-gray-100 text-gray-600'}`}>
+                                                {trip.travel_type.replace("_", " ")}
+                                            </span>
+                                        </div>
                                     )}
                                 </div>
                             </div>

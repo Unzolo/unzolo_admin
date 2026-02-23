@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "https://api.unzolo.com/api";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://staging.unzolo.com/api";
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,8 +31,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Set cookies — httpOnly for middleware, readable for axios Bearer header
-    console.log("[Auth] Login successful for user:", verifyData.user?.phone_number, "Role:", verifyData.user?.role);
-    
     const response = NextResponse.json({
       success: true,
       user: verifyData.user,

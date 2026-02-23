@@ -43,6 +43,15 @@ export default function PostManagement() {
         } catch { toast.error("Failed to delete post"); }
     };
 
+    const moderatePost = async (postId: string, currentModerated: boolean) => {
+        const action = !currentModerated ? "moderate" : "unmoderate";
+        if (!confirm(`Are you sure you want to ${action} this post? ${!currentModerated ? "It will be hidden from the frontend." : ""}`)) return;
+        try {
+            await api.post("/admin/posts/moderate", { postId, moderated: !currentModerated });
+            toast.success(`Post ${!currentModerated ? "moderated and hidden" : "restored"}`);
+            refetch();
+        } catch { toast.error(`Failed to ${action} post`); }
+    };
 
     const allPosts: any[] = data?.posts || [];
 
@@ -58,6 +67,7 @@ export default function PostManagement() {
         if (filter === "media") list = list.filter(p => p.media && p.media.length > 0);
         if (filter === "text") list = list.filter(p => !p.media || p.media.length === 0);
         if (filter === "popular") list = list.filter(p => (p.likesCount || 0) >= 10);
+        if (filter === "moderated") list = list.filter(p => p.is_moderated);
 
         if (sort === "newest") list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         if (sort === "oldest") list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -86,7 +96,7 @@ export default function PostManagement() {
                 search={search}
                 onSearchChange={setSearch}
                 placeholder="Search by content or author…"
-                filters={FILTERS}
+                filters={[...FILTERS, { label: "Moderated", value: "moderated" }]}
                 activeFilter={filter}
                 onFilterChange={setFilter}
                 sortOptions={SORT_OPTIONS}
@@ -111,10 +121,10 @@ export default function PostManagement() {
                             initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: i * 0.04 }}
-                            className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col hover:shadow-md hover:border-gray-200 transition-all group"
+                            className={`bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-all group ${post.is_moderated ? 'border-red-100 bg-red-50/5' : 'border-gray-100'}`}
                         >
                             {/* Header */}
-                            <div className="px-4 py-3 flex items-center justify-between border-b border-gray-50 bg-gray-50/50">
+                            <div className={`px-4 py-3 flex items-center justify-between border-b ${post.is_moderated ? 'bg-red-50/30 border-red-50 text-red-900' : 'bg-gray-50/50 border-gray-50'}`}>
                                 <div className="flex items-center gap-2.5">
                                     <div className="h-7 w-7 rounded-full overflow-hidden bg-gray-200 shrink-0">
                                         {post.author?.profile_picture
@@ -126,14 +136,19 @@ export default function PostManagement() {
                                         <p className="text-[0.6rem] text-gray-400">{format(new Date(post.created_at), "MMM d, yyyy")}</p>
                                     </div>
                                 </div>
-                                <button onClick={() => deletePost(post.id)} className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all">
-                                    <Trash2 size={14} />
-                                </button>
+                                <div className="flex items-center gap-1">
+                                    {post.is_moderated && (
+                                        <span className="text-[0.6rem] font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded-full mr-2">MODERATED</span>
+                                    )}
+                                    <button onClick={() => deletePost(post.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all">
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Content */}
                             <div className="p-4 flex-1">
-                                <p className="text-sm text-gray-600 line-clamp-4 leading-relaxed">
+                                <p className={`text-sm line-clamp-4 leading-relaxed ${post.is_moderated ? 'text-gray-400 italic' : 'text-gray-600'}`}>
                                     {post.content || <span className="italic text-gray-300">No text content</span>}
                                 </p>
                             </div>
@@ -145,9 +160,12 @@ export default function PostManagement() {
                                     <StatChip icon={MessageCircle} value={post.commentsCount || 0} color="text-blue-400" />
                                     <StatChip icon={Eye} value={post.views || 0} color="text-gray-400" />
                                 </div>
-                                <button className="flex items-center gap-1.5 text-[0.6rem] font-bold text-amber-500 hover:text-amber-600 transition-colors">
+                                <button
+                                    onClick={() => moderatePost(post.id, !!post.is_moderated)}
+                                    className={`flex items-center gap-1.5 text-[0.6rem] font-bold transition-colors ${post.is_moderated ? 'text-emerald-500 hover:text-emerald-600' : 'text-amber-500 hover:text-amber-600'}`}
+                                >
                                     <Flag size={10} />
-                                    MODERATE
+                                    {post.is_moderated ? "RESTORE POST" : "MODERATE"}
                                 </button>
                             </div>
                         </motion.div>

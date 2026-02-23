@@ -1,30 +1,37 @@
 import axios from 'axios';
-import { toast } from 'sonner';
+
+function getCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+  return match ? decodeURIComponent(match[2]) : null;
+}
 
 const api = axios.create({
-  baseURL: '/api/proxy',
+  // Pointing directly to backend again as requested
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'https://staging.unzolo.com/api',
   headers: { 'Content-Type': 'application/json' },
 });
 
-if (typeof window !== 'undefined') {
-  console.log('[Axios] Initialized with baseURL:', api.defaults.baseURL);
-}
+api.interceptors.request.use(
+  (config) => {
+    // Read token from client-side cookie
+    const token = getCookie('admin_token_client');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    const message = error.response?.data?.message || error.message || "An error occurred";
-    
+    // Simple redirect on 401
     if (error.response?.status === 401) {
-      toast.error(`Session Expired: ${message}`, { duration: 5000 });
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+      if (typeof window !== 'undefined') {
         window.location.href = '/login';
       }
-    } else if (error.response?.status === 403) {
-      toast.error(`Permission Denied: ${message}`, { duration: 5000 });
-      // Don't redirect on 403 so they can see the error
-    } else {
-      toast.error(message, { duration: 4000 });
     }
     return Promise.reject(error);
   }
