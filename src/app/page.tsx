@@ -13,6 +13,8 @@ import CampManagement from "@/components/admin/CampManagement";
 import PostManagement from "@/components/admin/PostManagement";
 import ChatManagement from "@/components/admin/ChatManagement";
 import TripManagement from "@/components/admin/TripManagement";
+import MaintenanceManagement from "@/components/admin/MaintenanceManagement";
+import GlobalEnvSwitch from "@/components/GlobalEnvSwitch";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/utils/axios";
 
@@ -24,6 +26,7 @@ const NAV = [
   { id: "trips", label: "Community Trips", icon: Compass, badge: null },
   { id: "posts", label: "Post Moderation", icon: TrendingUp, badge: null },
   { id: "chats", label: "User Chats", icon: MessageSquare, badge: null },
+  { id: "maintenance", label: "Maintenance", icon: ShieldCheck, badge: null },
 ];
 
 export default function AdminDashboard() {
@@ -47,6 +50,7 @@ export default function AdminDashboard() {
       case "trips": return <TripManagement />;
       case "posts": return <PostManagement />;
       case "chats": return <ChatManagement />;
+      case "maintenance": return <MaintenanceManagement />;
       default: return <DashboardOverview onNavigate={setActiveTab} />;
     }
   };
@@ -127,6 +131,11 @@ export default function AdminDashboard() {
             <span className="text-xs font-semibold text-gray-600">{activeNav?.label}</span>
           </div>
           <div className="flex-1" />
+
+          <div className="hidden lg:block mr-2">
+            <GlobalEnvSwitch />
+          </div>
+
           <div className="relative w-52 hidden md:block">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
             <input placeholder="Search..." className="w-full h-9 bg-gray-50 rounded-xl pl-9 pr-4 text-sm border border-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-normal/20 focus:border-primary-normal transition-all placeholder:text-gray-300" />
