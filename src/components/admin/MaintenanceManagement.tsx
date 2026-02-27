@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Database, Trash2, AlertTriangle, CheckCircle2, RefreshCcw, Globe, Shield, Settings, Server } from "lucide-react";
+import {
+    Database, Trash2, AlertTriangle, CheckCircle2, RefreshCcw,
+    Globe, Shield, Settings, Server, Users, Package, Map, TrendingUp
+} from "lucide-react";
 import api from "@/utils/axios";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -23,19 +26,6 @@ const MaintenanceManagement = () => {
         else setCurrentEnv("default");
     }, []);
 
-    const handleSwitchEnv = (env: string) => {
-        const url = env === "production" ? PROD_URL : STAGING_URL;
-        localStorage.setItem('unzolo_api_override', url);
-        toast.success(`Switched to ${env} environment. Reloading...`);
-        setTimeout(() => window.location.reload(), 1500);
-    };
-
-    const resetEnv = () => {
-        localStorage.removeItem('unzolo_api_override');
-        toast.success("Reset to default environment. Reloading...");
-        setTimeout(() => window.location.reload(), 1500);
-    };
-
     const clearDataMutation = useMutation({
         mutationFn: async (type: string | null) => {
             const res = await api.post("/admin/clear-data", { type });
@@ -46,11 +36,27 @@ const MaintenanceManagement = () => {
             setIsModalOpen(false);
             setConfirmText("");
             setSelectedType(null);
-            // Invalidate all queries to refresh the UI
             queryClient.invalidateQueries();
         },
         onError: (error: any) => {
             toast.error(error?.response?.data?.message || "Action failed");
+        },
+    });
+
+    const cloneDataMutation = useMutation({
+        mutationFn: async (type: string) => {
+            const res = await api.post("/admin/clone-data", {
+                type,
+                sourceUrl: STAGING_URL
+            });
+            return res.data;
+        },
+        onSuccess: (data) => {
+            toast.success(data.message || "Data cloned successfully!");
+            queryClient.invalidateQueries();
+        },
+        onError: (error: any) => {
+            toast.error(error?.response?.data?.message || "Clone failed");
         },
     });
 
@@ -164,6 +170,61 @@ const MaintenanceManagement = () => {
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {/* Data Synchronization Section */}
+            <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-lg bg-white border border-gray-100 flex items-center justify-center text-primary-normal shadow-sm">
+                        <RefreshCcw size={16} />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-800">Environment Sync</h2>
+                        <p className="text-[0.65rem] text-gray-400">Clone data from staging to production</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {[
+                        { id: "users", label: "Users", icon: Users, color: "text-blue-500", bg: "bg-blue-50" },
+                        { id: "packages", label: "Packages", icon: Package, color: "text-emerald-500", bg: "bg-emerald-50" },
+                        { id: "camps", label: "Camps", icon: Map, color: "text-amber-500", bg: "bg-amber-50" },
+                        { id: "posts", label: "Posts", icon: TrendingUp, color: "text-pink-500", bg: "bg-pink-50" },
+                    ].map((option) => (
+                        <div key={option.id} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all flex flex-col gap-4">
+                            <div className={`h-10 w-10 rounded-xl ${option.bg} ${option.color} flex items-center justify-center`}>
+                                <option.icon size={20} />
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-gray-800 text-sm">{option.label}</h4>
+                                <p className="text-[0.65rem] text-gray-400 mt-1">Fetch latest {option.id} from Staging</p>
+                            </div>
+                            <button
+                                onClick={() => cloneDataMutation.mutate(option.id)}
+                                disabled={currentEnv !== "production" || cloneDataMutation.isPending}
+                                className={`mt-auto w-full py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2
+                                    ${currentEnv === "production"
+                                        ? "bg-primary-light text-primary-normal hover:bg-primary-normal hover:text-white"
+                                        : "bg-gray-50 text-gray-300 cursor-not-allowed"}
+                                `}
+                            >
+                                {cloneDataMutation.isPending && cloneDataMutation.variables === option.id ? (
+                                    <div className="h-3 w-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                                ) : (
+                                    <>
+                                        <RefreshCcw size={12} />
+                                        Clone {option.label}
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    ))}
+                </div>
+                {currentEnv !== "production" && (
+                    <p className="text-[0.6rem] text-amber-600 font-bold bg-amber-50 px-3 py-1 rounded-full w-fit">
+                        ⚠️ Cloning is only available when active environment is set to PRODUCTION
+                    </p>
+                )}
             </div>
 
             {/* Selective Cleanup Section */}
