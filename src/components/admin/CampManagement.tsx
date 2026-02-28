@@ -1,14 +1,17 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useState, useMemo, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../../utils/axios";
 import { useRouter } from "next/navigation";
-import { Map as CampIcon, MapPin, IndianRupee, Trash2, Edit3, Plus, Calendar, Loader2 } from "lucide-react";
+import { Map as CampIcon, MapPin, IndianRupee, Trash2, Edit3, Plus, Calendar, Loader2, Copy } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import SearchFilterBar from "../ui/SearchFilterBar";
+
+const STAGING_URL = "https://staging.unzolo.com/api";
+const PROD_URL = "https://api.unzolo.com/api";
 
 const FILTERS = [
     { label: "All", value: "all" },
@@ -26,13 +29,50 @@ const SORT_OPTIONS = [
 
 export default function CampManagement() {
     const router = useRouter();
+    const queryClient = useQueryClient();
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState("all");
     const [sort, setSort] = useState("newest");
+    const [viewSource, setViewSource] = useState<"local" | "staging">("local");
+    const [currentEnv, setCurrentEnv] = useState<string>("");
+
+    useEffect(() => {
+        const saved = localStorage.getItem('unzolo_api_override');
+        if (saved === PROD_URL) setCurrentEnv("production");
+        else if (saved === STAGING_URL) setCurrentEnv("staging");
+        else setCurrentEnv("default");
+    }, []);
 
     const { data, isLoading, refetch } = useQuery({
-        queryKey: ["adminCamps"],
-        queryFn: async () => { const { data } = await api.get("/admin/camps"); return data; },
+        queryKey: ["adminCamps", viewSource],
+        queryFn: async () => {
+            const baseUrl = viewSource === "staging" ? STAGING_URL : "";
+            const endpoint = baseUrl ? `${baseUrl}/admin/camps` : "/admin/camps";
+            const { data } = await api.get(endpoint);
+            return data;
+        },
+    });
+
+    const cloneMutation = useMutation({
+        mutationFn: async ({ id }: { id: number }) => {
+            const res = await api.post("/admin/clone-data", {
+                type: "camps",
+                id,
+                sourceUrl: STAGING_URL
+            });
+            return res.data;
+        },
+        onSuccess: () => {
+            toast.success("Camp cloned successfully!");
+            if (viewSource === "staging") {
+                // If we were on staging, maybe stay there or suggest checking Prod
+                toast.info("Item added to Production.");
+            }
+            queryClient.invalidateQueries({ queryKey: ["adminCamps"] });
+        },
+        onError: (err: any) => {
+            toast.error(err?.response?.data?.message || "Clone failed");
+        }
     });
 
     const handleDelete = async (id: number) => {
@@ -43,7 +83,6 @@ export default function CampManagement() {
             refetch();
         } catch { toast.error("Failed to delete camp"); }
     };
-
 
     const allCamps: any[] = data?.camps || [];
 
@@ -72,13 +111,43 @@ export default function CampManagement() {
 
     if (isLoading) return <PageLoader label="Loading camps..." />;
 
+    const isFromStaging = viewSource === "staging";
+
     return (
         <div className="space-y-6">
-            <PageHeader
-                title="Camps"
-                count={allCamps.length}
-                action={{ label: "Host New Camp", onClick: () => router.push("/camps/create"), color: "amber" }}
-            />
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-xl font-bold text-gray-900">Camps</h2>
+                        {currentEnv === "production" && (
+                            <div className="flex p-0.5 bg-gray-100 rounded-xl">
+                                <button
+                                    onClick={() => setViewSource("local")}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewSource === "local" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                                >
+                                    Production
+                                </button>
+                                <button
+                                    onClick={() => setViewSource("staging")}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewSource === "staging" ? "bg-amber-500 text-white shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                                >
+                                    Staging
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                        {isFromStaging ? `Browsing staging - ${allCamps.length} records` : `${allCamps.length} ${allCamps.length === 1 ? "record" : "records"}`}
+                    </p>
+                </div>
+                <button
+                    onClick={() => router.push("/camps/create")}
+                    className="flex items-center gap-2 h-9 px-4 rounded-xl text-white text-sm font-semibold bg-primary-normal hover:opacity-90 active:scale-95 transition-all shadow-sm"
+                >
+                    <Plus size={15} />
+                    Host New Camp
+                </button>
+            </div>
 
             <SearchFilterBar
                 search={search}
@@ -104,7 +173,7 @@ export default function CampManagement() {
                             initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: i * 0.04 }}
-                            className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-lg hover:border-gray-200 transition-all group"
+                            className={`bg-white rounded-2xl border ${isFromStaging ? 'border-amber-200 bg-amber-50/20' : 'border-gray-100'} shadow-sm overflow-hidden hover:shadow-lg hover:border-gray-200 transition-all group`}
                         >
                             <div className="relative h-44 bg-amber-50">
                                 {camp.images?.[0]?.image_url ? (
@@ -115,12 +184,29 @@ export default function CampManagement() {
                                     </div>
                                 )}
                                 <div className="absolute inset-0 bg-linear-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
                                 <div className="absolute top-3 right-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all translate-y-1 group-hover:translate-y-0">
-                                    <ActionBtn icon={Edit3} onClick={() => router.push(`/camps/edit/${camp.id}`)} color="blue" />
-                                    <ActionBtn icon={Trash2} onClick={() => handleDelete(camp.id)} color="red" />
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); cloneMutation.mutate({ id: camp.id }); }}
+                                        disabled={cloneMutation.isPending && cloneMutation.variables?.id === camp.id}
+                                        title={isFromStaging ? "Clone to Production" : "Clone locally"}
+                                        className={`p-2 rounded-xl backdrop-blur-sm shadow-sm transition-all bg-white/90 ${isFromStaging ? 'text-amber-600 hover:bg-amber-600 hover:text-white' : 'text-emerald-600 hover:bg-emerald-600 hover:text-white'}`}
+                                    >
+                                        {cloneMutation.isPending && cloneMutation.variables?.id === camp.id ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />}
+                                    </button>
+
+                                    {!isFromStaging && (
+                                        <>
+                                            <ActionBtn icon={Edit3} onClick={() => router.push(`/camps/edit/${camp.id}`)} color="blue" />
+                                            <ActionBtn icon={Trash2} onClick={() => handleDelete(camp.id)} color="red" />
+                                        </>
+                                    )}
                                 </div>
+
                                 <div className="absolute top-3 left-3">
-                                    <span className="text-[0.6rem] font-bold px-2 py-1 rounded-full bg-amber-500 text-white">Camp</span>
+                                    <span className={`text-[0.6rem] font-bold px-2 py-1 rounded-full text-white ${isFromStaging ? 'bg-amber-600' : 'bg-amber-500'}`}>
+                                        {isFromStaging ? "On Staging" : "Camp"}
+                                    </span>
                                 </div>
                             </div>
                             <div className="p-4">
@@ -151,26 +237,7 @@ export default function CampManagement() {
     );
 }
 
-function PageHeader({ title, count, action }: { title: string; count: number; action?: { label: string; onClick: () => void; color?: string } }) {
-    const btnCls = action?.color === "amber"
-        ? "bg-amber-500 hover:opacity-90 shadow-amber-100"
-        : "bg-primary-normal hover:opacity-90";
-    return (
-        <div className="flex items-center justify-between gap-4">
-            <div>
-                <h2 className="text-xl font-bold text-gray-900">{title}</h2>
-                <p className="text-xs text-gray-400 mt-0.5">{count} {count === 1 ? "record" : "records"}</p>
-            </div>
-            {action && (
-                <button onClick={action.onClick} className={`flex items-center gap-2 h-9 px-4 rounded-xl text-white text-sm font-semibold active:scale-95 transition-all shadow-sm ${btnCls}`}>
-                    <Plus size={15} />
-                    {action.label}
-                </button>
-            )}
-        </div>
-    );
-}
-
+// ... rest of the helpers (PageHeader, ActionBtn, CreatorChip, PageLoader, EmptyState) exactly as before but ensuring they are exported or defined
 function ActionBtn({ icon: Icon, onClick, color }: { icon: any; onClick: () => void; color: "blue" | "red" }) {
     const cls = color === "blue" ? "bg-white/90 text-blue-600 hover:bg-blue-500 hover:text-white" : "bg-white/90 text-red-500 hover:bg-red-500 hover:text-white";
     return (

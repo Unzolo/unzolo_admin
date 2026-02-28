@@ -1,13 +1,16 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useState, useMemo, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../../utils/axios";
-import { Heart, MessageCircle, Trash2, Eye, User as UserIcon, Flag, Loader2 } from "lucide-react";
+import { Heart, MessageCircle, Trash2, Eye, User as UserIcon, Flag, Loader2, RefreshCcw, Copy } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import SearchFilterBar from "../ui/SearchFilterBar";
+
+const STAGING_URL = "https://staging.unzolo.com/api";
+const PROD_URL = "https://api.unzolo.com/api";
 
 const FILTERS = [
     { label: "All", value: "all" },
@@ -25,13 +28,46 @@ const SORT_OPTIONS = [
 ];
 
 export default function PostManagement() {
+    const queryClient = useQueryClient();
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState("all");
     const [sort, setSort] = useState("newest");
+    const [viewSource, setViewSource] = useState<"local" | "staging">("local");
+    const [currentEnv, setCurrentEnv] = useState<string>("");
+
+    useEffect(() => {
+        const saved = localStorage.getItem('unzolo_api_override');
+        if (saved === PROD_URL) setCurrentEnv("production");
+        else if (saved === STAGING_URL) setCurrentEnv("staging");
+        else setCurrentEnv("default");
+    }, []);
 
     const { data, isLoading, refetch } = useQuery({
-        queryKey: ["adminPosts"],
-        queryFn: async () => { const { data } = await api.get("/admin/posts"); return data; },
+        queryKey: ["adminPosts", viewSource],
+        queryFn: async () => {
+            const baseUrl = viewSource === "staging" ? STAGING_URL : "";
+            const endpoint = baseUrl ? `${baseUrl}/admin/posts` : "/admin/posts";
+            const { data } = await api.get(endpoint);
+            return data;
+        },
+    });
+
+    const cloneMutation = useMutation({
+        mutationFn: async ({ id }: { id: number }) => {
+            const res = await api.post("/admin/clone-data", {
+                type: "posts",
+                id,
+                sourceUrl: STAGING_URL
+            });
+            return res.data;
+        },
+        onSuccess: () => {
+            toast.success("Post cloned to Production!");
+            queryClient.invalidateQueries({ queryKey: ["adminPosts"] });
+        },
+        onError: (err: any) => {
+            toast.error(err?.response?.data?.message || "Clone failed");
+        }
     });
 
     const deletePost = async (id: string) => {
@@ -85,11 +121,35 @@ export default function PostManagement() {
         </div>
     );
 
+    const isFromStaging = viewSource === "staging";
+
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="text-xl font-bold text-gray-900">Post Moderation</h2>
-                <p className="text-xs text-gray-400 mt-0.5">{allPosts.length} posts to review</p>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-xl font-bold text-gray-900">Post Moderation</h2>
+                        {currentEnv === "production" && (
+                            <div className="flex p-0.5 bg-gray-100 rounded-xl">
+                                <button
+                                    onClick={() => setViewSource("local")}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewSource === "local" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                                >
+                                    Production
+                                </button>
+                                <button
+                                    onClick={() => setViewSource("staging")}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewSource === "staging" ? "bg-purple-500 text-white shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                                >
+                                    Staging
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                        {isFromStaging ? `Browsing staging - ${allPosts.length} posts found` : `${allPosts.length} posts to review`}
+                    </p>
+                </div>
             </div>
 
             <SearchFilterBar
@@ -121,10 +181,10 @@ export default function PostManagement() {
                             initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: i * 0.04 }}
-                            className={`bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-all group ${post.is_moderated ? 'border-red-100 bg-red-50/5' : 'border-gray-100'}`}
+                            className={`bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-all group ${isFromStaging ? 'border-purple-200 bg-purple-50/10' : (post.is_moderated ? 'border-red-100 bg-red-50/5' : 'border-gray-100')}`}
                         >
                             {/* Header */}
-                            <div className={`px-4 py-3 flex items-center justify-between border-b ${post.is_moderated ? 'bg-red-50/30 border-red-50 text-red-900' : 'bg-gray-50/50 border-gray-50'}`}>
+                            <div className={`px-4 py-3 flex items-center justify-between border-b ${isFromStaging ? 'bg-purple-50' : (post.is_moderated ? 'bg-red-50/30 border-red-50 text-red-900' : 'bg-gray-50/50 border-gray-50')}`}>
                                 <div className="flex items-center gap-2.5">
                                     <div className="h-7 w-7 rounded-full overflow-hidden bg-gray-200 shrink-0">
                                         {post.author?.profile_picture
@@ -137,12 +197,24 @@ export default function PostManagement() {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-1">
-                                    {post.is_moderated && (
+                                    {isFromStaging && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); cloneMutation.mutate({ id: post.id }); }}
+                                            disabled={cloneMutation.isPending && cloneMutation.variables?.id === post.id}
+                                            className="flex items-center gap-1 px-2 py-1 bg-purple-600 text-white rounded-lg text-[0.6rem] font-bold shadow-lg hover:bg-purple-700 active:scale-95 transition-all"
+                                        >
+                                            {cloneMutation.isPending && cloneMutation.variables?.id === post.id ? <Loader2 size={10} className="animate-spin" /> : <Copy size={10} />}
+                                            CLONE
+                                        </button>
+                                    )}
+                                    {post.is_moderated && !isFromStaging && (
                                         <span className="text-[0.6rem] font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded-full mr-2">MODERATED</span>
                                     )}
-                                    <button onClick={() => deletePost(post.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all">
-                                        <Trash2 size={14} />
-                                    </button>
+                                    {!isFromStaging && (
+                                        <button onClick={() => deletePost(post.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all">
+                                            <Trash2 size={14} />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
@@ -154,20 +226,22 @@ export default function PostManagement() {
                             </div>
 
                             {/* Footer */}
-                            <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <StatChip icon={Heart} value={post.likesCount || 0} color="text-red-400" />
-                                    <StatChip icon={MessageCircle} value={post.commentsCount || 0} color="text-blue-400" />
-                                    <StatChip icon={Eye} value={post.views || 0} color="text-gray-400" />
+                            {!isFromStaging && (
+                                <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <StatChip icon={Heart} value={post.likesCount || 0} color="text-red-400" />
+                                        <StatChip icon={MessageCircle} value={post.commentsCount || 0} color="text-blue-400" />
+                                        <StatChip icon={Eye} value={post.views || 0} color="text-gray-400" />
+                                    </div>
+                                    <button
+                                        onClick={() => moderatePost(post.id, !!post.is_moderated)}
+                                        className={`flex items-center gap-1.5 text-[0.6rem] font-bold transition-colors ${post.is_moderated ? 'text-emerald-500 hover:text-emerald-600' : 'text-amber-500 hover:text-amber-600'}`}
+                                    >
+                                        <Flag size={10} />
+                                        {post.is_moderated ? "RESTORE POST" : "MODERATE"}
+                                    </button>
                                 </div>
-                                <button
-                                    onClick={() => moderatePost(post.id, !!post.is_moderated)}
-                                    className={`flex items-center gap-1.5 text-[0.6rem] font-bold transition-colors ${post.is_moderated ? 'text-emerald-500 hover:text-emerald-600' : 'text-amber-500 hover:text-amber-600'}`}
-                                >
-                                    <Flag size={10} />
-                                    {post.is_moderated ? "RESTORE POST" : "MODERATE"}
-                                </button>
-                            </div>
+                            )}
                         </motion.div>
                     ))}
                 </div>

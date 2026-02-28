@@ -1,12 +1,15 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useState, useMemo, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../../utils/axios";
-import { User as UserIcon, ShieldAlert, ShieldCheck, Phone, MoreVertical, Loader2, Users } from "lucide-react";
+import { User as UserIcon, ShieldAlert, ShieldCheck, Phone, MoreVertical, Loader2, Users, RefreshCcw, Copy } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import SearchFilterBar from "../ui/SearchFilterBar";
+
+const STAGING_URL = "https://staging.unzolo.com/api";
+const PROD_URL = "https://api.unzolo.com/api";
 
 const FILTERS = [
     { label: "All", value: "all" },
@@ -23,14 +26,47 @@ const SORT_OPTIONS = [
 ];
 
 export default function UserManagement() {
-    const { data, isLoading, refetch } = useQuery({
-        queryKey: ["adminUsers"],
-        queryFn: async () => { const { data } = await api.get("/admin/users"); return data; },
-    });
-
+    const queryClient = useQueryClient();
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState("all");
     const [sort, setSort] = useState("newest");
+    const [viewSource, setViewSource] = useState<"local" | "staging">("local");
+    const [currentEnv, setCurrentEnv] = useState<string>("");
+
+    useEffect(() => {
+        const saved = localStorage.getItem('unzolo_api_override');
+        if (saved === PROD_URL) setCurrentEnv("production");
+        else if (saved === STAGING_URL) setCurrentEnv("staging");
+        else setCurrentEnv("default");
+    }, []);
+
+    const { data, isLoading, refetch } = useQuery({
+        queryKey: ["adminUsers", viewSource],
+        queryFn: async () => {
+            const baseUrl = viewSource === "staging" ? STAGING_URL : "";
+            const endpoint = baseUrl ? `${baseUrl}/admin/users` : "/admin/users";
+            const { data } = await api.get(endpoint);
+            return data;
+        },
+    });
+
+    const cloneMutation = useMutation({
+        mutationFn: async ({ id }: { id: string }) => {
+            const res = await api.post("/admin/clone-data", {
+                type: "users",
+                id,
+                sourceUrl: STAGING_URL
+            });
+            return res.data;
+        },
+        onSuccess: () => {
+            toast.success("User synced from Staging!");
+            queryClient.invalidateQueries({ queryKey: ["adminUsers"] });
+        },
+        onError: (err: any) => {
+            toast.error(err?.response?.data?.message || "Sync failed");
+        }
+    });
 
     const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
         try {
@@ -75,16 +111,35 @@ export default function UserManagement() {
         </div>
     );
 
+    const isFromStaging = viewSource === "staging";
+
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-xl font-bold text-gray-900">User Management</h2>
-                    <p className="text-xs text-gray-400 mt-0.5">{allUsers.length} registered users</p>
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-xl font-bold text-gray-900">User Management</h2>
+                        {currentEnv === "production" && (
+                            <div className="flex p-0.5 bg-gray-100 rounded-xl">
+                                <button
+                                    onClick={() => setViewSource("local")}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewSource === "local" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                                >
+                                    Production
+                                </button>
+                                <button
+                                    onClick={() => setViewSource("staging")}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewSource === "staging" ? "bg-blue-500 text-white shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                                >
+                                    Staging
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                        {isFromStaging ? `Browsing staging - ${allUsers.length} records found` : `${allUsers.length} registered users`}
+                    </p>
                 </div>
-                <button className="flex items-center gap-2 h-9 px-4 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-all">
-                    Export CSV
-                </button>
             </div>
 
             <SearchFilterBar
@@ -117,7 +172,7 @@ export default function UserManagement() {
                                 initial={{ opacity: 0, x: -8 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: i * 0.03 }}
-                                className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50/60 transition-colors group"
+                                className={`flex items-center gap-4 px-5 py-4 hover:bg-gray-50/60 transition-colors group ${isFromStaging ? 'bg-blue-50/10' : ''}`}
                             >
                                 {/* Avatar */}
                                 <div className="h-10 w-10 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center shrink-0 border border-gray-100">
@@ -144,21 +199,36 @@ export default function UserManagement() {
                                         }`}>{user.role || "user"}</span>
                                 </div>
 
-                                {/* Status toggle */}
-                                <button
-                                    onClick={() => toggleUserStatus(user.id, user.is_active)}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[0.65rem] font-bold transition-all shrink-0 ${user.is_active
-                                        ? "bg-emerald-50 text-emerald-600 hover:bg-red-50 hover:text-red-600"
-                                        : "bg-red-50 text-red-600 hover:bg-emerald-50 hover:text-emerald-600"
-                                        }`}
-                                >
-                                    {user.is_active ? <ShieldCheck size={12} /> : <ShieldAlert size={12} />}
-                                    {user.is_active ? "Active" : "Blocked"}
-                                </button>
+                                {/* Status / Sync toggle */}
+                                <div className="flex items-center gap-2">
+                                    {isFromStaging ? (
+                                        <button
+                                            onClick={() => cloneMutation.mutate({ id: user.id })}
+                                            disabled={cloneMutation.isPending && cloneMutation.variables?.id === user.id}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 text-white text-[0.65rem] font-bold shadow-lg hover:bg-blue-700 active:scale-95 transition-all"
+                                        >
+                                            {cloneMutation.isPending && cloneMutation.variables?.id === user.id ? <Loader2 size={12} className="animate-spin" /> : <Copy size={12} />}
+                                            SYNC USER
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => toggleUserStatus(user.id, user.is_active)}
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[0.65rem] font-bold transition-all shrink-0 ${user.is_active
+                                                ? "bg-emerald-50 text-emerald-600 hover:bg-red-50 hover:text-red-600"
+                                                : "bg-red-50 text-red-600 hover:bg-emerald-50 hover:text-emerald-600"
+                                                }`}
+                                        >
+                                            {user.is_active ? <ShieldCheck size={12} /> : <ShieldAlert size={12} />}
+                                            {user.is_active ? "Active" : "Blocked"}
+                                        </button>
+                                    )}
 
-                                <button className="p-1.5 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-all opacity-0 group-hover:opacity-100 shrink-0">
-                                    <MoreVertical size={15} />
-                                </button>
+                                    {!isFromStaging && (
+                                        <button className="p-1.5 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-all opacity-0 group-hover:opacity-100 shrink-0">
+                                            <MoreVertical size={15} />
+                                        </button>
+                                    )}
+                                </div>
                             </motion.div>
                         ))}
                     </div>

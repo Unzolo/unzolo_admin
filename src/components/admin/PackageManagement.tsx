@@ -1,17 +1,20 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useState, useMemo, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../../utils/axios";
 import { useRouter } from "next/navigation";
 import {
     Package as PackageIcon, MapPin, IndianRupee, Trash2, Edit3,
-    Plus, Calendar, Loader2, Clock, AlertTriangle, X
+    Plus, Calendar, Loader2, Clock, AlertTriangle, X, RefreshCcw, Copy
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import SearchFilterBar from "../ui/SearchFilterBar";
+
+const STAGING_URL = "https://staging.unzolo.com/api";
+const PROD_URL = "https://api.unzolo.com/api";
 
 // ─── Delete Confirm Modal ─────────────────────────────────────────────────────
 
@@ -53,7 +56,14 @@ function DeleteModal({ name, onConfirm, onCancel, loading }: {
 
 // ─── Package Card ─────────────────────────────────────────────────────────────
 
-function PackageCard({ pkg, onEdit, onDelete }: { pkg: any; onEdit: () => void; onDelete: () => void }) {
+function PackageCard({ pkg, onEdit, onDelete, onClone, isCloning, isFromStaging }: {
+    pkg: any;
+    onEdit?: () => void;
+    onDelete?: () => void;
+    onClone: () => void;
+    isCloning?: boolean;
+    isFromStaging?: boolean;
+}) {
     const nights = pkg.start_date && pkg.end_date
         ? Math.ceil((new Date(pkg.end_date).getTime() - new Date(pkg.start_date).getTime()) / (1000 * 60 * 60 * 24))
         : null;
@@ -66,7 +76,7 @@ function PackageCard({ pkg, onEdit, onDelete }: { pkg: any; onEdit: () => void; 
         <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden group hover:shadow-xl hover:shadow-gray-200/60 transition-all duration-300"
+            className={`bg-white rounded-3xl border ${isFromStaging ? 'border-primary-normal/30 bg-primary-light/5' : 'border-gray-100'} shadow-sm overflow-hidden group hover:shadow-xl hover:shadow-gray-200/60 transition-all duration-300`}
         >
             {/* Image */}
             <div className="relative h-36 bg-linear-to-br from-gray-100 to-gray-200 overflow-hidden">
@@ -89,7 +99,7 @@ function PackageCard({ pkg, onEdit, onDelete }: { pkg: any; onEdit: () => void; 
                 {/* Top badges */}
                 <div className="absolute top-3 left-3 flex gap-1.5">
                     <span className="text-[0.6rem] font-bold px-2.5 py-1 rounded-full bg-primary-normal/90 text-white backdrop-blur-sm">
-                        Active
+                        {isFromStaging ? "On Staging" : "Active"}
                     </span>
                     {pkg.travel_type && (
                         <span className="text-[0.6rem] font-bold px-2.5 py-1 rounded-full bg-white/20 text-white backdrop-blur-sm capitalize">
@@ -100,21 +110,41 @@ function PackageCard({ pkg, onEdit, onDelete }: { pkg: any; onEdit: () => void; 
 
                 {/* Action buttons */}
                 <div className="absolute bottom-3 right-3 flex gap-2">
-                    <button
-                        onClick={onEdit}
-                        title="Edit package"
-                        className="flex items-center gap-1.5 h-8 px-3 rounded-xl bg-white/95 backdrop-blur-sm text-blue-600 text-xs font-bold shadow-lg hover:bg-blue-600 hover:text-white transition-all active:scale-95"
-                    >
-                        <Edit3 size={12} />
-                        Edit
-                    </button>
-                    <button
-                        onClick={onDelete}
-                        title="Delete package"
-                        className="h-8 w-8 rounded-xl bg-white/95 backdrop-blur-sm text-red-500 shadow-lg hover:bg-red-500 hover:text-white transition-all active:scale-95 flex items-center justify-center"
-                    >
-                        <Trash2 size={13} />
-                    </button>
+                    {onClone && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onClone(); }}
+                            disabled={isCloning}
+                            title={isFromStaging ? "Clone to Production" : "Duplicate package"}
+                            className={`flex items-center gap-1.5 h-8 px-3 rounded-xl backdrop-blur-sm text-xs font-bold shadow-lg transition-all active:scale-95
+                                ${isFromStaging
+                                    ? "bg-primary-normal text-white hover:bg-primary-dark"
+                                    : "bg-white/95 text-emerald-600 hover:bg-emerald-600 hover:text-white"}
+                            `}
+                        >
+                            {isCloning ? <Loader2 size={12} className="animate-spin" /> : <Copy size={12} />}
+                            {isFromStaging ? "Clone to Prod" : "Clone"}
+                        </button>
+                    )}
+
+                    {!isFromStaging && onEdit && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                            title="Edit package"
+                            className="flex items-center gap-1.5 h-8 px-3 rounded-xl bg-white/95 backdrop-blur-sm text-blue-600 text-xs font-bold shadow-lg hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                        >
+                            <Edit3 size={12} />
+                            Edit
+                        </button>
+                    )}
+                    {!isFromStaging && onDelete && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                            title="Delete package"
+                            className="h-8 w-8 rounded-xl bg-white/95 backdrop-blur-sm text-red-500 shadow-lg hover:bg-red-500 hover:text-white transition-all active:scale-95 flex items-center justify-center"
+                        >
+                            <Trash2 size={13} />
+                        </button>
+                    )}
                 </div>
 
                 {/* Duration chip */}
@@ -209,15 +239,48 @@ const SORT_OPTIONS = [
 
 export default function PackageManagement() {
     const router = useRouter();
+    const queryClient = useQueryClient();
     const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState("all");
     const [sort, setSort] = useState("newest");
+    const [viewSource, setViewSource] = useState<"local" | "staging">("local");
+    const [currentEnv, setCurrentEnv] = useState<string>("");
+
+    useEffect(() => {
+        const saved = localStorage.getItem('unzolo_api_override');
+        if (saved === PROD_URL) setCurrentEnv("production");
+        else if (saved === STAGING_URL) setCurrentEnv("staging");
+        else setCurrentEnv("default");
+    }, []);
 
     const { data, isLoading, refetch } = useQuery({
-        queryKey: ["adminPackages"],
-        queryFn: async () => { const { data } = await api.get("/admin/packages"); return data; },
+        queryKey: ["adminPackages", viewSource],
+        queryFn: async () => {
+            const baseUrl = viewSource === "staging" ? STAGING_URL : "";
+            const endpoint = baseUrl ? `${baseUrl}/admin/packages` : "/admin/packages";
+            const { data } = await api.get(endpoint);
+            return data;
+        },
+    });
+
+    const cloneMutation = useMutation({
+        mutationFn: async ({ id, isToProd }: { id: number; isToProd: boolean }) => {
+            const res = await api.post("/admin/clone-data", {
+                type: "packages",
+                id,
+                sourceUrl: STAGING_URL
+            });
+            return res.data;
+        },
+        onSuccess: () => {
+            toast.success("Package cloned successfully!");
+            queryClient.invalidateQueries({ queryKey: ["adminPackages"] });
+        },
+        onError: (err: any) => {
+            toast.error(err?.response?.data?.message || "Clone failed");
+        }
     });
 
     const handleDelete = async () => {
@@ -287,11 +350,29 @@ export default function PackageManagement() {
 
             <div className="space-y-6">
                 {/* Header */}
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-900">Packages</h2>
+                        <div className="flex items-center gap-3">
+                            <h2 className="text-2xl font-bold text-gray-900">Packages</h2>
+                            {currentEnv === "production" && (
+                                <div className="flex p-0.5 bg-gray-100 rounded-xl">
+                                    <button
+                                        onClick={() => setViewSource("local")}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewSource === "local" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                                    >
+                                        Production
+                                    </button>
+                                    <button
+                                        onClick={() => setViewSource("staging")}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewSource === "staging" ? "bg-primary-normal text-white shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                                    >
+                                        Staging
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                         <p className="text-sm text-gray-400 mt-0.5">
-                            {allPackages.length} {allPackages.length === 1 ? "package" : "packages"} available
+                            {viewSource === 'staging' ? `Browsing staging - ${allPackages.length} packages found` : `${allPackages.length} ${allPackages.length === 1 ? "package" : "packages"} available`}
                         </p>
                     </div>
                     <button
@@ -346,8 +427,18 @@ export default function PackageManagement() {
                         <motion.div key={pkg.id} transition={{ delay: i * 0.05 }}>
                             <PackageCard
                                 pkg={pkg}
+                                isFromStaging={viewSource === "staging"}
                                 onEdit={() => router.push(`/packages/edit/${pkg.id}`)}
                                 onDelete={() => setDeleteTarget({ id: pkg.id, name: pkg.title })}
+                                isCloning={cloneMutation.isPending && cloneMutation.variables?.id === pkg.id}
+                                onClone={() => {
+                                    if (viewSource === 'staging') {
+                                        cloneMutation.mutate({ id: pkg.id, isToProd: true });
+                                    } else {
+                                        // Logic for local duplicate if desired, but user specifically asked for staging data sync context
+                                        toast.info("Duplicate function coming soon. Use 'Staging' view to sync data to Production.");
+                                    }
+                                }}
                             />
                         </motion.div>
                     ))}
