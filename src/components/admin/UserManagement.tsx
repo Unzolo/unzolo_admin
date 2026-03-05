@@ -7,6 +7,7 @@ import { User as UserIcon, ShieldAlert, ShieldCheck, Phone, MoreVertical, Loader
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import SearchFilterBar from "../ui/SearchFilterBar";
+import EditUserModal from "./EditUserModal";
 
 const STAGING_URL = "https://staging.unzolo.com/api";
 const PROD_URL = "https://api.unzolo.com/api";
@@ -32,6 +33,8 @@ export default function UserManagement() {
     const [sort, setSort] = useState("newest");
     const [viewSource, setViewSource] = useState<"local" | "staging">("local");
     const [currentEnv, setCurrentEnv] = useState<string>("");
+
+    const [editingUser, setEditingUser] = useState<any>(null);
 
     useEffect(() => {
         const saved = localStorage.getItem('unzolo_api_override');
@@ -199,8 +202,17 @@ export default function UserManagement() {
                                         }`}>{user.role || "user"}</span>
                                 </div>
 
-                                {/* Status / Sync toggle */}
+                                {/* Action Buttons */}
                                 <div className="flex items-center gap-2">
+                                    {!isFromStaging && (
+                                        <button
+                                            onClick={() => setEditingUser(user)}
+                                            className="px-3 py-1.5 rounded-xl bg-gray-900 text-white text-[0.65rem] font-bold hover:bg-black active:scale-95 transition-all"
+                                        >
+                                            EDIT
+                                        </button>
+                                    )}
+
                                     {isFromStaging ? (
                                         <button
                                             onClick={() => cloneMutation.mutate({ id: user.id })}
@@ -234,6 +246,13 @@ export default function UserManagement() {
                     </div>
                 </div>
             )}
+
+            <EditUserModal
+                isOpen={!!editingUser}
+                onClose={() => setEditingUser(null)}
+                user={editingUser}
+                onSuccess={() => refetch()}
+            />
         </div>
     );
 }
