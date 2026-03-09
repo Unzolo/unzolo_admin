@@ -96,18 +96,18 @@ export default function PostManagement() {
         const q = search.toLowerCase();
 
         if (q) list = list.filter(p =>
-            (p.content || "").toLowerCase().includes(q) ||
+            (p.caption || "").toLowerCase().includes(q) ||
             (p.author?.username || "").toLowerCase().includes(q)
         );
 
-        if (filter === "media") list = list.filter(p => p.media && p.media.length > 0);
-        if (filter === "text") list = list.filter(p => !p.media || p.media.length === 0);
-        if (filter === "popular") list = list.filter(p => (p.likesCount || 0) >= 10);
+        if (filter === "media") list = list.filter(p => p.files && p.files.length > 0);
+        if (filter === "text") list = list.filter(p => !p.files || p.files.length === 0);
+        if (filter === "popular") list = list.filter(p => (p.likes || 0) >= 10);
         if (filter === "moderated") list = list.filter(p => p.is_moderated);
 
         if (sort === "newest") list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         if (sort === "oldest") list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-        if (sort === "likes_desc") list.sort((a, b) => (b.likesCount || 0) - (a.likesCount || 0));
+        if (sort === "likes_desc") list.sort((a, b) => (b.likes || 0) - (a.likes || 0));
         if (sort === "comments_desc") list.sort((a, b) => (b.commentsCount || 0) - (a.commentsCount || 0));
         if (sort === "views_desc") list.sort((a, b) => (b.views || 0) - (a.views || 0));
 
@@ -174,7 +174,7 @@ export default function PostManagement() {
                     <p className="text-sm text-gray-400">{search || filter !== "all" ? "No posts match your filters." : "No posts to moderate."}</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 items-start">
                     {displayed.map((post: any, i: number) => (
                         <motion.div
                             key={post.id}
@@ -218,10 +218,26 @@ export default function PostManagement() {
                                 </div>
                             </div>
 
+                            {/* Media Preview */}
+                            {post.files && post.files.length > 0 && (
+                                <div className={`px-4 pb-4 grid gap-1 ${post.files.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                                    {post.files.slice(0, 4).map((file: any, idx: number) => (
+                                        <div key={file.id} className={`relative aspect-video rounded-lg overflow-hidden bg-gray-100 border border-gray-100 ${post.files.length === 3 && idx === 0 ? 'row-span-2' : ''}`}>
+                                            <img src={file.file_url} className="w-full h-full object-cover" alt="" />
+                                            {idx === 3 && post.files.length > 4 && (
+                                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white text-xs font-bold">
+                                                    +{post.files.length - 4}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
                             {/* Content */}
-                            <div className="p-4 flex-1">
+                            <div className="p-4 pt-0">
                                 <p className={`text-sm line-clamp-4 leading-relaxed ${post.is_moderated ? 'text-gray-400 italic' : 'text-gray-600'}`}>
-                                    {post.content || <span className="italic text-gray-300">No text content</span>}
+                                    {post.caption || <span className="italic text-gray-300">No text content</span>}
                                 </p>
                             </div>
 
@@ -229,7 +245,7 @@ export default function PostManagement() {
                             {!isFromStaging && (
                                 <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        <StatChip icon={Heart} value={post.likesCount || 0} color="text-red-400" />
+                                        <StatChip icon={Heart} value={post.likes || 0} color="text-red-400" />
                                         <StatChip icon={MessageCircle} value={post.commentsCount || 0} color="text-blue-400" />
                                         <StatChip icon={Eye} value={post.views || 0} color="text-gray-400" />
                                     </div>
