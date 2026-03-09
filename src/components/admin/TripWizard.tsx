@@ -70,17 +70,37 @@ const Step1 = ({ formData, setFormData, handleFileSelect, filePreviews, removeFi
                 className="relative w-full h-48 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center cursor-pointer hover:border-primary-normal/40 hover:bg-primary-light/30 transition-all group overflow-hidden"
             >
                 <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileSelect} multiple accept="image/*" />
-                {filePreviews.length > 0 ? (
+                {(filePreviews.length > 0 || (formData.images && formData.images.filter((img: string) => img.trim() !== "").length > 0)) ? (
                     <div className="absolute inset-0 flex gap-2 p-3 overflow-x-auto" onClick={(e) => e.stopPropagation()}>
-                        {filePreviews.map((src: string, i: number) => (
-                            <div key={i} className="relative shrink-0 h-full aspect-square rounded-xl overflow-hidden shadow-md">
+                        {/* Existing Images */}
+                        {formData.images?.filter((img: string) => img.trim() !== "").map((src: string, i: number) => (
+                            <div key={`existing-${i}`} className="relative shrink-0 h-full aspect-square rounded-xl overflow-hidden shadow-md">
                                 <img src={src} className="w-full h-full object-cover" alt="" />
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setFormData((prev: any) => ({
+                                            ...prev,
+                                            images: prev.images.filter((_: any, idx: number) => idx !== i)
+                                        }));
+                                    }}
+                                    className="absolute top-1.5 right-1.5 p-1 bg-black/60 rounded-full text-white hover:bg-red-500 transition-colors"
+                                >
+                                    <X size={10} />
+                                </button>
+                            </div>
+                        ))}
+                        {/* New File Previews */}
+                        {filePreviews.map((src: string, i: number) => (
+                            <div key={`new-${i}`} className="relative shrink-0 h-full aspect-square rounded-xl overflow-hidden shadow-md">
+                                <img src={src} className="w-full h-full object-cover border-2 border-primary-normal/20" alt="" />
                                 <button
                                     onClick={(e) => { e.stopPropagation(); removeFile(i); }}
                                     className="absolute top-1.5 right-1.5 p-1 bg-black/60 rounded-full text-white hover:bg-red-500 transition-colors"
                                 >
                                     <X size={10} />
                                 </button>
+                                <div className="absolute bottom-0 left-0 right-0 bg-primary-normal/80 text-white text-[0.5rem] font-bold py-0.5 text-center px-1">NEW</div>
                             </div>
                         ))}
                         <div className="shrink-0 h-full aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-primary-normal hover:text-primary-normal transition-all cursor-pointer px-3" onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
@@ -535,7 +555,7 @@ export default function TripWizard({ type, initialData }: TripWizardProps) {
         highlights: [] as string[], inclusions: [] as string[],
         exclusions: [] as string[], things_to_carry: [] as string[],
         activities: [] as string[], itinerary: [] as any[],
-        images: [""]
+        images: [] as string[]
     });
 
     useEffect(() => {
@@ -564,7 +584,7 @@ export default function TripWizard({ type, initialData }: TripWizardProps) {
                 things_to_carry: parseJSON(initialData.things_to_carry) || [],
                 activities: parseJSON(initialData.activities) || [],
                 itinerary: parseJSON(initialData.itinerary) || [],
-                images: initialData.images?.map((img: any) => img.image_url) || [""]
+                images: initialData.images?.map((img: any) => img.image_url) || []
             });
         }
     }, [initialData]);

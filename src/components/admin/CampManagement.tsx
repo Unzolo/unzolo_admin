@@ -43,37 +43,60 @@ export default function CampManagement() {
         else setCurrentEnv("default");
     }, []);
 
+    const isProductionEnv = currentEnv === "production" || (currentEnv === "default" && process.env.NEXT_PUBLIC_API_URL === PROD_URL);
+    const isOnStaging = currentEnv === "staging" || (currentEnv === "default" && process.env.NEXT_PUBLIC_API_URL === STAGING_URL);
+
+
     const { data, isLoading, refetch } = useQuery({
         queryKey: ["adminCamps", viewSource],
         queryFn: async () => {
-            const baseUrl = viewSource === "staging" ? STAGING_URL : "";
-            const endpoint = baseUrl ? `${baseUrl}/admin/camps` : "/admin/camps";
-            const { data } = await api.get(endpoint);
+            if (viewSource === "staging") {
+                const { data } = await api.get("/admin/staging-data", {
+                    params: { type: "camps", sourceUrl: STAGING_URL }
+                });
+                return data;
+            }
+            const { data } = await api.get("/admin/camps");
             return data;
         },
     });
 
     const cloneMutation = useMutation({
-        mutationFn: async ({ id }: { id: number }) => {
-            const res = await api.post("/admin/clone-data", {
-                type: "camps",
-                id,
-                sourceUrl: STAGING_URL
-            });
+        mutationFn: async ({ id, isToProd }: { id: number; isToProd: boolean }) => {
+            const endpoint = isToProd ? "/admin/clone-data" : "/admin/duplicate-data";
+            const payload = isToProd
+                ? { type: "camps", id, sourceUrl: STAGING_URL }
+                : { type: "camps", id };
+
+            // If we're on staging and pushing to production, hit the prod URL directly
+            if (isToProd && isOnStaging) {
+                const res = await api.post(endpoint, payload, { baseURL: PROD_URL });
+                return res.data;
+            }
+
+            const res = await api.post(endpoint, payload);
             return res.data;
         },
-        onSuccess: () => {
-            toast.success("Camp cloned successfully!");
-            if (viewSource === "staging") {
-                // If we were on staging, maybe stay there or suggest checking Prod
-                toast.info("Item added to Production.");
-            }
+        onSuccess: (data) => {
+            toast.success(data.message || "Action successful!");
             queryClient.invalidateQueries({ queryKey: ["adminCamps"] });
+            if (viewSource === "staging") {
+                setViewSource("local");
+            }
         },
         onError: (err: any) => {
-            toast.error(err?.response?.data?.message || "Clone failed");
+            toast.error(err?.response?.data?.message || "Operation failed");
         }
     });
+
+    const handleClone = (camp: any) => {
+        const isFromStaging = viewSource === "staging" || isOnStaging;
+        if (isFromStaging) {
+            cloneMutation.mutate({ id: camp.id, isToProd: true });
+        } else {
+            cloneMutation.mutate({ id: camp.id, isToProd: false });
+        }
+    };
 
     const handleDelete = async (id: number) => {
         if (!confirm("Delete this camp? This action cannot be undone.")) return;
@@ -111,7 +134,7 @@ export default function CampManagement() {
 
     if (isLoading) return <PageLoader label="Loading camps..." />;
 
-    const isFromStaging = viewSource === "staging";
+    const isFromStaging = viewSource === "staging" || isOnStaging;
 
     return (
         <div className="space-y-6">
@@ -119,7 +142,7 @@ export default function CampManagement() {
                 <div>
                     <div className="flex items-center gap-3">
                         <h2 className="text-xl font-bold text-gray-900">Camps</h2>
-                        {currentEnv === "production" && (
+                        {isProductionEnv && (
                             <div className="flex p-0.5 bg-gray-100 rounded-xl">
                                 <button
                                     onClick={() => setViewSource("local")}
@@ -137,7 +160,7 @@ export default function CampManagement() {
                         )}
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">
-                        {isFromStaging ? `Browsing staging - ${allCamps.length} records` : `${allCamps.length} ${allCamps.length === 1 ? "record" : "records"}`}
+                        {viewSource === 'staging' || isOnStaging ? `Browsing staging - ${allCamps.length} records` : `${allCamps.length} ${allCamps.length === 1 ? "record" : "records"}`}
                     </p>
                 </div>
                 <button
@@ -185,17 +208,9 @@ export default function CampManagement() {
                                 )}
                                 <div className="absolute inset-0 bg-linear-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
-                                <div className="absolute top-3 right-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all translate-y-1 group-hover:translate-y-0">
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); cloneMutation.mutate({ id: camp.id }); }}
-                                        disabled={cloneMutation.isPending && cloneMutation.variables?.id === camp.id}
-                                        title={isFromStaging ? "Clone to Production" : "Clone locally"}
-                                        className={`p-2 rounded-xl backdrop-blur-sm shadow-sm transition-all bg-white/90 ${isFromStaging ? 'text-amber-600 hover:bg-amber-600 hover:text-white' : 'text-emerald-600 hover:bg-emerald-600 hover:text-white'}`}
-                                    >
-                                        {cloneMutation.isPending && cloneMutation.variables?.id === camp.id ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />}
-                                    </button>
+                                <div className={`absolute top-3 right-3 flex gap-1.5 transition-all transform ${isFromStaging ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0'}`}>
 
-                                    {!isFromStaging && (
+                                    {viewSource !== "staging" && (
                                         <>
                                             <ActionBtn icon={Edit3} onClick={() => router.push(`/camps/edit/${camp.id}`)} color="blue" />
                                             <ActionBtn icon={Trash2} onClick={() => handleDelete(camp.id)} color="red" />
@@ -229,6 +244,19 @@ export default function CampManagement() {
                                     <CreatorChip creator={camp.creator} />
                                 </div>
                             </div>
+
+                            {isFromStaging && (
+                                <div className="px-4 pb-4">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleClone(camp); }}
+                                        disabled={cloneMutation.isPending && cloneMutation.variables?.id === camp.id}
+                                        className="w-full h-10 rounded-2xl bg-amber-600 text-white text-sm font-bold shadow-md shadow-amber-200 hover:bg-amber-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        {cloneMutation.isPending && cloneMutation.variables?.id === camp.id ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />}
+                                        Clone to Production
+                                    </button>
+                                </div>
+                            )}
                         </motion.div>
                     ))}
                 </div>

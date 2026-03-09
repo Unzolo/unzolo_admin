@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../../utils/axios";
-import { User as UserIcon, ShieldAlert, ShieldCheck, Phone, MoreVertical, Loader2, Users, RefreshCcw, Copy } from "lucide-react";
+import { User as UserIcon, ShieldAlert, ShieldCheck, Phone, MoreVertical, Loader2, Users, RefreshCcw, Copy, Eye, PencilLine } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import SearchFilterBar from "../ui/SearchFilterBar";
@@ -31,10 +31,11 @@ export default function UserManagement() {
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState("all");
     const [sort, setSort] = useState("newest");
-    const [viewSource, setViewSource] = useState<"local" | "staging">("local");
+    const [viewSource, setViewSource] = useState<"local" | "staging" | "production">("local");
     const [currentEnv, setCurrentEnv] = useState<string>("");
 
-    const [editingUser, setEditingUser] = useState<any>(null);
+    const [selectedUser, setSelectedUser] = useState<any>(null);
+    const [modalMode, setModalMode] = useState<"view" | "edit">("view");
 
     useEffect(() => {
         const saved = localStorage.getItem('unzolo_api_override');
@@ -52,6 +53,11 @@ export default function UserManagement() {
             return data;
         },
     });
+
+    const handleOpenModal = (user: any, mode: "view" | "edit") => {
+        setSelectedUser(user);
+        setModalMode(mode);
+    };
 
     const cloneMutation = useMutation({
         mutationFn: async ({ id }: { id: string }) => {
@@ -205,12 +211,22 @@ export default function UserManagement() {
                                 {/* Action Buttons */}
                                 <div className="flex items-center gap-2">
                                     {!isFromStaging && (
-                                        <button
-                                            onClick={() => setEditingUser(user)}
-                                            className="px-3 py-1.5 rounded-xl bg-gray-900 text-white text-[0.65rem] font-bold hover:bg-black active:scale-95 transition-all"
-                                        >
-                                            EDIT
-                                        </button>
+                                        <>
+                                            <button
+                                                onClick={() => handleOpenModal(user, "view")}
+                                                className="p-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95 transition-all"
+                                                title="View Profile"
+                                            >
+                                                <Eye size={16} />
+                                            </button>
+                                            <button
+                                                onClick={() => handleOpenModal(user, "edit")}
+                                                className="p-2 rounded-xl bg-gray-900 text-white hover:bg-black active:scale-95 transition-all"
+                                                title="Edit User"
+                                            >
+                                                <PencilLine size={16} />
+                                            </button>
+                                        </>
                                     )}
 
                                     {isFromStaging ? (
@@ -248,9 +264,10 @@ export default function UserManagement() {
             )}
 
             <EditUserModal
-                isOpen={!!editingUser}
-                onClose={() => setEditingUser(null)}
-                user={editingUser}
+                isOpen={!!selectedUser}
+                onClose={() => setSelectedUser(null)}
+                user={selectedUser}
+                initialMode={modalMode}
                 onSuccess={() => refetch()}
             />
         </div>
